@@ -163,10 +163,18 @@ function buildInjection(mems, skills, stats, projCtx, userTask) {
 
   const hasSkills = skills.length > 0
   const mandatory = hasSkills
-    ? `## 强制技能调用 — 以下技能必须用 Skill 工具执行，禁止手动替代\n${skillText}`
+    ? `## 强制技能调用 — 必须执行，禁止跳过
+优先调用 Skill 工具。如果 CC 报 Unknown skill，从文件读取：
+\`d:/claude/context-proxy/skills/all/{技能名}.md\`
+按文件内的指令手动执行。
+
+${skillText}`
     : '## 无匹配技能 — 直接执行即可'
 
   return `# Context Proxy Injection
+
+## 执行规则
+当上方推荐技能时，你必须执行——优先用 Skill 工具，失败则读外挂文件按指令手动执行。不能跳过。
 
 ## 当前任务
 ${userTask || '(未检测到)'}
