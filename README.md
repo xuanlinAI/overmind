@@ -1,6 +1,13 @@
 # Context Proxy — Claude Code 外挂记忆插件
 
 <p align="center">
+  <a href="https://github.com/xuanlinAI/context-proxy/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
+  <a href="https://github.com/xuanlinAI/context-proxy/stargazers"><img src="https://img.shields.io/github/stars/xuanlinAI/context-proxy" alt="Stars"></a>
+  <a href="https://github.com/xuanlinAI/context-proxy"><img src="https://img.shields.io/badge/version-1.0.0-green.svg" alt="Version"></a>
+  <a href="https://github.com/xuanlinAI/context-proxy"><img src="https://img.shields.io/badge/platform-Claude%20Code-orange.svg" alt="Platform"></a>
+</p>
+
+<p align="center">
   <b>Claude Code 的 Hermes 风格长期记忆系统</b><br>
   跨会话记忆 · AI 自动提炼 · 上下文蒸馏 · 技能强制调度
 </p>
