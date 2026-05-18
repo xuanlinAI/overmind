@@ -1,0 +1,38 @@
+{
+  "name": "context-proxy",
+  "version": "1.0.0",
+  "description": "外部记忆代理 — 跨会话分层记忆 + 技能调度 + 自进化。每次会话只注入 <1000 tokens 精简上下文。",
+  "author": "Claude Code User",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"D:/claude/context-proxy/inject.js\""
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"D:/claude/context-proxy/consolidate.js\""
+          }
+        ]
+      }
+    ]
+  },
+  "mcpServers": {
+    "context-proxy": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["C:/Users/Administrator/.claude/plugins/context-proxy/daemon.js"],
+      "env": {}
+    }
+  }
+}

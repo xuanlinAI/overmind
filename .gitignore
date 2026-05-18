@@ -1,0 +1,13 @@
+skills/
+node_modules/
+__pycache__/
+*.db
+*.db-shm
+*.db-wal
+memory/
+hook.log
+injection.md
+.env
+ctxproxy.cmd
+daemon_launcher.js
+package-lock.json
