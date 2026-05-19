@@ -19,3 +19,4 @@ health_check.py
 .hermes_counter
 .injector.lock
 .injection.lock
+.research_findings.json

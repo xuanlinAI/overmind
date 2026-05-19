@@ -210,6 +210,14 @@ ${context.substring(0, 2000)}`
         }
       }
 
+      // ---- CAUSAL: Record exposures ----
+      try {
+        const graph = require(path.join(ROOT, 'graph'))
+        for (const key of injectedKeys) {
+          graph.recordExposure(key)
+        }
+      } catch(e) {}
+
       // Sync skill prefs to shared file
       index.syncSkillPrefsToFile()
     }

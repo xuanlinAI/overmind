@@ -13,6 +13,7 @@ const RELATION_TYPES = [
   'blocked_by',      // A is prevented by B
   'causes',          // A leads to B
   'solves',          // A resolves B
+  'mitigates',       // A reduces negative effect of B
   'related_to',      // general association
   'extends',         // A builds on B
   'conflicts_with',  // A contradicts B
@@ -55,6 +56,9 @@ function init() {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_edges_type ON edges(relation_type)`)
   db.exec(`CREATE INDEX IF NOT EXISTS idx_edges_src_tgt ON edges(source, target)`)
   try { db.exec('ALTER TABLE edges ADD COLUMN updated_at TEXT') } catch(e) {}
+  try { db.exec('ALTER TABLE edges ADD COLUMN exposure_count INTEGER DEFAULT 0') } catch(e) {}
+  try { db.exec('ALTER TABLE edges ADD COLUMN outcome_count INTEGER DEFAULT 0') } catch(e) {}
+  try { db.exec('ALTER TABLE edges ADD COLUMN failure_rate REAL DEFAULT 0') } catch(e) {}
 
   // FTS for edge search
   try {
@@ -482,6 +486,83 @@ function formatWarnings(warnings, maxWarnings = 5) {
   return lines.join('\n')
 }
 
+// ---- CAUSAL REASONING ----
+
+function recordExposure(causeKey) {
+  if (!db) init()
+  // Increment exposure for all outgoing causal edges
+  db.prepare(`UPDATE edges SET exposure_count = COALESCE(exposure_count, 0) + 1
+    WHERE source = ? AND relation_type IN ('causes', 'mitigates')`).run(causeKey)
+}
+
+function recordOutcome(causeKey, effectKey, success) {
+  if (!db) init()
+  const edge = db.prepare(`SELECT id, exposure_count, outcome_count FROM edges
+    WHERE source = ? AND target = ? AND relation_type = 'causes'`).get(causeKey, effectKey)
+  if (!edge) return
+  const newOutcome = (edge.outcome_count || 0) + 1
+  const newExposure = Math.max(newOutcome, edge.exposure_count || 0)
+  const failureRate = success ? 0 : (newExposure - newOutcome + (success ? 0 : 1)) / Math.max(1, newExposure)
+  db.prepare(`UPDATE edges SET outcome_count = ?, exposure_count = ?, failure_rate = ?
+    WHERE id = ?`).run(newOutcome, newExposure, Math.round(failureRate * 100) / 100, edge.id)
+}
+
+function getCausalChain(key, maxDepth = 3) {
+  if (!db) init()
+  const chain = []
+  const visited = new Set()
+  const queue = [[key, 0, []]]
+
+  while (queue.length > 0) {
+    const [current, depth, path] = queue.shift()
+    if (depth >= maxDepth || visited.has(current)) continue
+    visited.add(current)
+
+    const edges = db.prepare(`SELECT source, target, relation_type, confidence, evidence,
+      COALESCE(exposure_count,0) as ec, COALESCE(outcome_count,0) as oc, COALESCE(failure_rate,0) as fr
+      FROM edges WHERE source = ? AND relation_type IN ('causes','mitigates','blocked_by')
+      ORDER BY confidence DESC LIMIT 10`).all(current)
+
+    for (const e of edges) {
+      if (visited.has(e.target)) continue
+      const node = {
+        from: e.source, to: e.target,
+        relation: e.relation_type, confidence: e.confidence,
+        exposure: e.ec, outcomes: e.oc, failure_rate: e.fr,
+        evidence: e.evidence || ''
+      }
+      chain.push(node)
+      queue.push([e.target, depth + 1, [...path, current]])
+    }
+  }
+
+  return {
+    root: key,
+    depth: maxDepth,
+    chains: chain,
+    summary: summarizeCausal(chain)
+  }
+}
+
+function summarizeCausal(chain) {
+  if (chain.length === 0) return '无已知因果关系'
+  const highRisk = chain.filter(c => c.relation === 'blocked_by')
+  const failures = chain.filter(c => c.relation === 'causes' && c.failure_rate > 0.5)
+  const mitigations = chain.filter(c => c.relation === 'mitigates')
+
+  const parts = []
+  if (highRisk.length > 0) {
+    parts.push(`${highRisk.length} 个阻塞风险：${highRisk.map(c => c.to).join(', ')}`)
+  }
+  if (failures.length > 0) {
+    parts.push(`${failures.length} 个高失败率因果链：${failures.map(c => `${c.from}→${c.to}(${(c.failure_rate*100).toFixed(0)}%)`).join(', ')}`)
+  }
+  if (mitigations.length > 0) {
+    parts.push(`${mitigations.length} 个缓解方案：${mitigations.map(c => c.to).join(', ')}`)
+  }
+  return parts.join(' | ') || '因果关系链已建立，风险较低'
+}
+
 // ---- SEARCH ----
 
 function searchGraph(query, limit = 10) {
@@ -512,5 +593,6 @@ module.exports = {
   getConnectedComponents, expandKeys,
   buildExtractionPrompt, parseExtractionResult, applyRelations,
   searchGraph, getStats,
-  getWarnings, formatWarnings
+  getWarnings, formatWarnings,
+  recordExposure, recordOutcome, getCausalChain, summarizeCausal
 }
