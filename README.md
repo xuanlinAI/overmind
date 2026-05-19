@@ -311,6 +311,70 @@ i.syncSkillPrefsToFile();
 
 ---
 
+## 平台适配
+
+Overmind 的依赖面极小——Node.js 18+ + Python 3.10+ + SQLite + `jieba`。CC 特定代码仅 37 处，全部集中在 transcript 路径读取。
+
+| 平台 | MCP 工具 | 自动注入 | Worker 后台提取 | 改造量 |
+|------|---------|---------|---------------|--------|
+| **Claude Code** | ✅ | ✅ `!include` | ✅ JSONL | 0 (原生) |
+| **Hermes Agent** | ✅ | ⚠️ | ⚠️ | ~20 行 |
+| **OpenClaw** | ✅ | ⚠️ | ⚠️ | ~20 行 |
+| **Cursor** | ✅ | ⚠️ | ⚠️ | ~20 行 |
+| **Codex CLI** | ✅ | ⚠️ | ⚠️ | ~20 行 |
+| **Gemini CLI** | ✅ | ⚠️ | ⚠️ | ~20 行 |
+| **Aider** | ⚠️ REST | ❌ | ❌ | ~100 行 |
+| **任何 MCP 客户端** | ✅ 14/18 工具 | ❌ | ❌ | 0 |
+
+### 适配指南
+
+所有非 CC 平台的改造集中在三个文件：
+
+**1. 修改 transcript 路径**
+
+编辑 `inject.js` 和 `extract_worker.js`，找到 `TRANSCRIPT_DIR`，改为目标平台的对话记录目录：
+
+```javascript
+// Claude Code (默认)
+const TRANSCRIPT_DIR = path.join(HOME, '.claude', 'projects', 'D--claude')
+
+// Hermes Agent
+const TRANSCRIPT_DIR = path.join(HOME, '.hermes', 'sessions')
+
+// OpenClaw
+const TRANSCRIPT_DIR = path.join(HOME, '.openclaw', 'conversations')
+
+// Cursor
+const TRANSCRIPT_DIR = path.join(HOME, '.cursor', 'history')
+```
+
+**2. 修改 transcript 解析格式**
+
+`extract_worker.js` 的 `compressForExtraction` 函数中，调整 JSON 解析以匹配目标平台的对话格式：
+
+```javascript
+// Hermes Agent 对话格式
+const role = msg.role || 'unknown'
+let content = msg.content || ''
+
+// OpenClaw 对话格式 (可能有不同字段名)
+const role = msg.sender || msg.role || 'unknown'
+let content = msg.text || msg.content || ''
+```
+
+**3. 修改注入方式**
+
+CC 通过 `!include injection.md` 读取注入内容。其他平台需要替代方案：
+
+- **Hermes Agent** — 注册为插件，在 `SessionStart` 时调用 `hermes memory inject --file injection.md`
+- **OpenClaw** — 通过 MCP 工具 `memory_load` 或写入 Active Memory
+- **Cursor / Codex** — 通过 MCP 工具 `current_context` 获取注入内容，手动加入 system prompt
+- **通用 MCP** — 直接调用 `search_memory` 和 `current_context` 工具按需获取
+
+完整引擎（注入 + Worker + 进化）在非 CC 平台上约需 20 行改动。
+
+---
+
 ## FAQ
 
 **会影响 CC 启动速度吗？**
@@ -579,6 +643,65 @@ i.syncSkillPrefsToFile();
 | `record_feedback` | Record memory effectiveness feedback |
 | `skill_rankings` | Skill effectiveness leaderboard |
 | `skill_prefs` | Query skill usage preferences |
+
+## Platform Compatibility
+
+Overmind has a minimal dependency surface — Node.js 18+ + Python 3.10+ + SQLite + `jieba`. Only 37 lines of CC-specific code exist, all related to transcript path reading.
+
+| Platform | MCP Tools | Auto-Inject | Worker | Changes |
+|----------|-----------|-------------|--------|---------|
+| **Claude Code** | ✅ | ✅ `!include` | ✅ JSONL | 0 (native) |
+| **Hermes Agent** | ✅ | ⚠️ | ⚠️ | ~20 lines |
+| **OpenClaw** | ✅ | ⚠️ | ⚠️ | ~20 lines |
+| **Cursor** | ✅ | ⚠️ | ⚠️ | ~20 lines |
+| **Codex CLI** | ✅ | ⚠️ | ⚠️ | ~20 lines |
+| **Gemini CLI** | ✅ | ⚠️ | ⚠️ | ~20 lines |
+| **Aider** | ⚠️ REST | ❌ | ❌ | ~100 lines |
+| **Any MCP Client** | ✅ 14/18 tools | ❌ | ❌ | 0 |
+
+### Adaptation Guide
+
+Three files need changes for non-CC platforms:
+
+**1. Transcript path**
+
+Edit `inject.js` and `extract_worker.js`, find `TRANSCRIPT_DIR`, change to target platform:
+
+```javascript
+// Claude Code (default)
+const TRANSCRIPT_DIR = path.join(HOME, '.claude', 'projects', ...)
+
+// Hermes Agent
+const TRANSCRIPT_DIR = path.join(HOME, '.hermes', 'sessions')
+
+// OpenClaw
+const TRANSCRIPT_DIR = path.join(HOME, '.openclaw', 'conversations')
+```
+
+**2. Transcript format**
+
+In `extract_worker.js` `compressForExtraction`, adjust JSON parsing:
+
+```javascript
+// Hermes Agent format
+const role = msg.role || 'unknown'
+let content = msg.content || ''
+
+// OpenClaw format (may differ)
+const role = msg.sender || msg.role || 'unknown'
+let content = msg.text || msg.content || ''
+```
+
+**3. Injection method**
+
+CC uses `!include injection.md`. Alternatives:
+
+- **Hermes Agent** — register as plugin, call `hermes memory inject --file injection.md` on SessionStart
+- **OpenClaw** — MCP tool `memory_load` or write to Active Memory
+- **Cursor / Codex** — call MCP `current_context` tool, add to system prompt
+- **Generic MCP** — use `search_memory` and `current_context` tools on demand
+
+Full engine (inject + worker + evolution) on non-CC platforms: ~20 lines of changes.
 
 ## FAQ
 
