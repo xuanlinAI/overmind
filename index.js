@@ -32,6 +32,7 @@ function init() {
   try { db.exec('ALTER TABLE semantic ADD COLUMN last_effective_at TEXT') } catch(e) {}
   try { db.exec('ALTER TABLE semantic ADD COLUMN ineffective_count INTEGER DEFAULT 0') } catch(e) {}
   try { db.exec('ALTER TABLE semantic ADD COLUMN injected_count INTEGER DEFAULT 0') } catch(e) {}
+  try { db.exec('ALTER TABLE semantic ADD COLUMN commit_hash TEXT') } catch(e) {}
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS procedural (
@@ -44,6 +45,8 @@ function init() {
       created_at TEXT DEFAULT (datetime('now'))
     )
   `)
+  try { db.exec('CREATE VIRTUAL TABLE IF NOT EXISTS procedural_fts USING fts5(name, description, steps, trigger_patterns, tokenize="unicode61")') } catch(e) {}
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS skill_index (
       name TEXT PRIMARY KEY,
@@ -53,6 +56,15 @@ function init() {
       installed_at TEXT DEFAULT (datetime('now'))
     )
   `)
+  try { db.exec('ALTER TABLE skill_index ADD COLUMN invoke_count INTEGER DEFAULT 0') } catch(e) {}
+  try { db.exec('ALTER TABLE skill_index ADD COLUMN last_invoked TEXT') } catch(e) {}
+  try { db.exec('ALTER TABLE skill_index ADD COLUMN quality_score REAL DEFAULT 0.3') } catch(e) {}
+  try { db.exec('ALTER TABLE skill_index ADD COLUMN version TEXT DEFAULT "1.0.0"') } catch(e) {}
+  try { db.exec('ALTER TABLE skill_index ADD COLUMN requires TEXT') } catch(e) {}
+  try { db.exec('ALTER TABLE skill_index ADD COLUMN provides TEXT') } catch(e) {}
+  try { db.exec('ALTER TABLE skill_index ADD COLUMN matching_tags TEXT DEFAULT ""') } catch(e) {}
+  try { db.exec('ALTER TABLE procedural ADD COLUMN status TEXT DEFAULT "active"') } catch(e) {}
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS evolution_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -115,7 +127,7 @@ function ensureMemoryDirs() {
 
 // ---- SEMANTIC MEMORY ----
 
-function saveSemantic(key, content, tags = '', sourceSession = null, dedupKey = null, confidence = 0.5) {
+function saveSemantic(key, content, tags = '', sourceSession = null, dedupKey = null, confidence = 0.5, commitHash = null) {
   // Dedup check: if dedupKey provided, check for existing memory with same dedup key
   if (dedupKey) {
     try {
@@ -145,7 +157,7 @@ function saveSemantic(key, content, tags = '', sourceSession = null, dedupKey = 
     db.prepare('DELETE FROM semantic_fts WHERE rowid = (SELECT rowid FROM semantic_fts WHERE key = ?)').run(key)
     db.prepare('INSERT INTO semantic_fts(key, content, tags) VALUES (?,?,?)').run(key, content, tags)
   } else {
-    try { db.prepare('INSERT INTO semantic (key, content, tags, source_session, dedup_key) VALUES (?, ?, ?, ?, ?)').run(key, content, tags, sourceSession, dedupKey) }
+    try { db.prepare('INSERT INTO semantic (key, content, tags, source_session, dedup_key, commit_hash) VALUES (?, ?, ?, ?, ?, ?)').run(key, content, tags, sourceSession, dedupKey, commitHash) }
     catch(e) { db.prepare('INSERT INTO semantic (key, content, tags) VALUES (?, ?, ?)').run(key, content, tags) }
     db.prepare('INSERT INTO semantic_fts(key, content, tags) VALUES (?,?,?)').run(key, content, tags)
   }
@@ -605,6 +617,19 @@ function syncSkillPrefsToFile() {
   return data
 }
 
+function getGitHead() {
+  try {
+    return require('child_process').execSync('git rev-parse --short HEAD', { encoding:'utf-8', timeout:2000, stdio:['ignore','pipe','ignore'] }).trim()
+  } catch(e) { return null }
+}
+
+function getGitTimeline(limit = 10) {
+  if (!db) init()
+  return db.prepare(`SELECT key, content, commit_hash, created_at FROM semantic
+    WHERE commit_hash IS NOT NULL AND key != '_schema_version'
+    ORDER BY created_at DESC LIMIT ?`).all(limit)
+}
+
 module.exports = {
   init, ensureMemoryDirs,
   saveSemantic, searchBM25, searchHybrid,
@@ -615,5 +640,6 @@ module.exports = {
   logEvolution, detectPatterns, compactMemories, getStats,
   recordFeedback, detectMemoryReferences, rankByEffectiveness, getMemoryFeedback, pruneIneffective,
   recordSkillFeedback, upsertSkillPref, getSkillPrefs, getSkillRankings,
-  formatSkillPrefsForAI, syncSkillPrefsToFile
+  formatSkillPrefsForAI, syncSkillPrefsToFile,
+  getGitHead, getGitTimeline
 }
