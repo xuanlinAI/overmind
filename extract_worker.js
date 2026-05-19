@@ -324,32 +324,8 @@ async function main() {
         startTime = Date.now()
       }
 
-      // Autonomous research: idle >5min → analyze patterns
-      const RESEARCH_IDLE = 5 * 60 * 1000
-      const idle = Date.now() - lastContentTime
-      if (idle > RESEARCH_IDLE && (Date.now() - lastConsolidationCheck) > RESEARCH_IDLE) {
-        try {
-          const research = require(path.join(ROOT, 'research'))
-          const index = require(path.join(ROOT, 'index'))
-          const analysis = research.analyze(index)
-          if (analysis && analysis.total_findings > 0) {
-            const findingsFile = path.join(ROOT, '.research_findings.json')
-            fs.writeFileSync(findingsFile, JSON.stringify(analysis, null, 2), 'utf-8')
-            log(`research: ${analysis.total_findings} patterns found`)
-          }
-
-          // Cross-project: extract transferable knowledge
-          const transfer = require(path.join(ROOT, 'transfer'))
-          const result = transfer.extractTransferable(index)
-          if (result && result.added > 0) {
-            log(`transfer: ${result.added}/${result.total} facts transferable`)
-          }
-        } catch(e) {
-          log(`research error: ${e.message}`)
-        }
-      }
-
       // Session end: transcript idle >15min → auto-consolidate
+      const idle = Date.now() - lastContentTime
       if (idle > SESSION_IDLE_TIMEOUT && (Date.now() - lastConsolidationCheck) > SESSION_IDLE_TIMEOUT) {
         lastConsolidationCheck = Date.now()
         const { spawn } = require('child_process')

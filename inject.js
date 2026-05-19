@@ -428,12 +428,7 @@ function getRecentContext() {
   } catch(e) { return '' }
 }
 
-function buildInjection(mems, skills, stats, projCtx, userTask, issueMems, taskPlan, skillStatus, warningText, prediction, researchText, transferSection) {
-  const intentText = prediction && prediction.task_hint
-    ? `\n## 意图预判\n${prediction.preload_hint}\n时间: ${prediction.time_mode} | 项目: ${prediction.project} | 信号: ${prediction.signals.slice(0,3).join(' → ')}`
-    : ''
-  const researchSection = researchText || ''
-
+function buildInjection(mems, skills, stats, projCtx, userTask, issueMems, taskPlan, skillStatus, warningText) {
   const planText = taskPlan ? `\n## 执行计划\n${taskPlan}` : ''
   const progressText = issueMems.length > 0
     ? `\n## 未解决问题\n${issueMems.slice(0, 3).map(m => `- ${m.key}: ${m.content?.substring(0, 150)}`).join('\n')}`
@@ -465,7 +460,6 @@ function buildInjection(mems, skills, stats, projCtx, userTask, issueMems, taskP
 
 ## 当前任务
 ${userTask || '(未检测到)'}
-${intentText}
 
 ## 项目上下文
 ${projCtx}
@@ -475,10 +469,6 @@ ${recentText}
 ${planText}
 
 ${warningSection}
-
-${researchSection}
-
-${transferSection}
 
 ${mandatory}
 
@@ -546,23 +536,6 @@ async function main() {
     var workerSpawned = false
   }
 
-  // ---- INTENT PREDICTION ----
-  const intent = require(path.join(ROOT, 'intent'))
-  const prediction = intent.predict(process.cwd())
-
-  // ---- AUTONOMOUS RESEARCH ----
-  let researchFindings = ''
-  try {
-    const rfFile = path.join(ROOT, '.research_findings.json')
-    if (fs.existsSync(rfFile)) {
-      const rfData = JSON.parse(fs.readFileSync(rfFile, 'utf-8'))
-      const research = require(path.join(ROOT, 'research'))
-      if (rfData && rfData.total_findings > 0) {
-        researchFindings = research.formatFindings(rfData)
-      }
-    }
-  } catch(e) {}
-
   const stats = index.getStats()
   const userTask = getUserTask()
   const projCtx = projectContext()
@@ -596,19 +569,9 @@ async function main() {
     }
   } catch(e) {}
 
-  // ---- CROSS-PROJECT TRANSFER ----
-  let transferText = ''
-  try {
-    const transfer = require(path.join(ROOT, 'transfer'))
-    const transRows = transfer.getTransferable(userTask || projCtx, 5)
-    if (transRows.length > 0) {
-      transferText = transfer.formatTransferable(transRows)
-    }
-  } catch(e) {}
-
   // Phase 1: Write lite injection immediately — fast, zero API delay
   const liteMems = keywordMems.slice(0, 5)
-  const liteDoc = buildInjection(liteMems, [], stats, projCtx, userTask, issueMems, null, '⏳ AI 筛选中…', liteWarningText, prediction, researchFindings, transferText)
+  const liteDoc = buildInjection(liteMems, [], stats, projCtx, userTask, issueMems, null, '⏳ AI 筛选中…', liteWarningText)
   writeInjection(liteDoc)
   fs.appendFileSync(logFile, `${new Date().toISOString()} inject(lite): ${liteDoc.length} chars mem=${stats.semanticCount} worker=${workerSpawned ? 'spawned' : 'already_running'}\n`)
 
@@ -751,20 +714,6 @@ async function main() {
     }
     const memKeys = mems.map(m => m.key)
     const warnings = graph.getWarnings(memKeys, feedbackLookup)
-
-    // Add causal chain summary
-    for (const key of memKeys.slice(0, 3)) {
-      const causal = graph.getCausalChain(key, 2)
-      if (causal && causal.summary !== '无已知因果关系') {
-        warnings.push({
-          source: key, target: 'causal_chain', relation_type: 'chain',
-          danger_type: 'causal_insight', severity: 'medium',
-          reason: `因果链分析: ${causal.summary}`,
-          confidence: 0.7, evidence: '', label: '🔗 因果链'
-        })
-      }
-    }
-
     if (warnings.length > 0) {
       warningText = graph.formatWarnings(warnings, 5)
       fs.appendFileSync(logFile, `${new Date().toISOString()} guard: ${warnings.length} warnings found | high=${warnings.filter(w=>w.severity==='high').length} medium=${warnings.filter(w=>w.severity==='medium').length}\n`)
@@ -784,7 +733,7 @@ async function main() {
     } else {
       skillStatus = '未匹配到合适技能'
     }
-    const fullDoc = buildInjection(mems, skills, stats, projCtx, userTask, issueMems, taskPlan, skillStatus, warningText, prediction, researchFindings, transferText)
+    const fullDoc = buildInjection(mems, skills, stats, projCtx, userTask, issueMems, taskPlan, skillStatus, warningText)
     writeInjection(fullDoc)
     fs.appendFileSync(logFile, `${new Date().toISOString()} inject(full): ${fullDoc.length} chars skills=[${skills.map(s=>s.name).join(',')}] sel=${skillMethod} mems=${memMethod} status=${skillStatus}\n`)
   } else {
