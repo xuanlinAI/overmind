@@ -64,10 +64,10 @@ ${context.substring(0, 2000)}`
         }
         const epFile = path.join(ROOT, 'memory', 'episodic', `${sessionId}.json`)
         fs.writeFileSync(epFile, JSON.stringify(epData, null, 2), 'utf-8')
-        process.stdout.write(`[ctxproxy] episode saved: ${epSummary.substring(0, 80)}...\n`)
+        process.stdout.write(`[overmind] episode saved: ${epSummary.substring(0, 80)}...\n`)
       }
     } catch(e) {
-      process.stdout.write(`[ctxproxy] episode summary failed: ${e.message}\n`)
+      process.stdout.write(`[overmind] episode summary failed: ${e.message}\n`)
     }
   }
 
@@ -89,9 +89,9 @@ ${context.substring(0, 2000)}`
           extracted++
         }
       }
-      process.stdout.write(`[ctxproxy] extracted ${extracted} facts from session\n`)
+      process.stdout.write(`[overmind] extracted ${extracted} facts from session\n`)
     } catch(e) {
-      process.stdout.write(`[ctxproxy] session extraction failed: ${e.message}\n`)
+      process.stdout.write(`[overmind] session extraction failed: ${e.message}\n`)
     }
   }
 
@@ -135,11 +135,11 @@ ${context.substring(0, 2000)}`
       }
 
       if (refs.length > 0) {
-        process.stdout.write(`[ctxproxy] feedback: ${refs.length}/${injectedKeys.length} memories referenced, recorded helped\n`)
+        process.stdout.write(`[overmind] feedback: ${refs.length}/${injectedKeys.length} memories referenced, recorded helped\n`)
       }
     }
   } catch(e) {
-    process.stdout.write(`[ctxproxy] feedback analysis error: ${e.message}\n`)
+    process.stdout.write(`[overmind] feedback analysis error: ${e.message}\n`)
   }
 
   // ---- SKILL FEEDBACK: Detect invocation + completion ----
@@ -196,7 +196,7 @@ ${context.substring(0, 2000)}`
         for (const sn of invokedSkills) {
           index.recordSkillFeedback(sn, 'completed', '', sessionId, 0.9)
         }
-        process.stdout.write(`[ctxproxy] skill_fb: ${invokedSkills.length} skills completed\n`)
+        process.stdout.write(`[overmind] skill_fb: ${invokedSkills.length} skills completed\n`)
       } else if (invokedSkills.length > 0) {
         for (const sn of invokedSkills) {
           index.recordSkillFeedback(sn, 'failed', '', sessionId, 0.2)
@@ -214,7 +214,7 @@ ${context.substring(0, 2000)}`
       index.syncSkillPrefsToFile()
     }
   } catch(e) {
-    process.stdout.write(`[ctxproxy] skill_fb error: ${e.message}\n`)
+    process.stdout.write(`[overmind] skill_fb error: ${e.message}\n`)
   }
 
   // ---- GRAPH: Ensure graph module is loaded ----
@@ -237,15 +237,15 @@ ${context.substring(0, 2000)}`
       const result = execSync(`python -c "${pyCmd}"`, {
         cwd: ROOT, timeout: 90000, encoding: 'utf-8'
       })
-      process.stdout.write(`[ctxproxy] hermes_fusion: ${result.trim()}\n`)
+      process.stdout.write(`[overmind] hermes_fusion: ${result.trim()}\n`)
       fs.writeFileSync(HERMES_COUNT_FILE, String(stats.semanticCount))
     } catch(e) {
-      process.stdout.write(`[ctxproxy] hermes_fusion failed: ${e.message}\n`)
+      process.stdout.write(`[overmind] hermes_fusion failed: ${e.message}\n`)
     }
   }
 
   const afterStats = index.getStats()
-  process.stdout.write(`[ctxproxy] session ${sessionId} done | mems: ${stats.semanticCount}→${afterStats.semanticCount} | episode: saved\n`)
+  process.stdout.write(`[overmind] session ${sessionId} done | mems: ${stats.semanticCount}→${afterStats.semanticCount} | episode: saved\n`)
 }
 
 const HERMES_COUNT_FILE = path.join(ROOT, '.hermes_counter')

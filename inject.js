@@ -456,7 +456,7 @@ function buildInjection(mems, skills, stats, projCtx, userTask, issueMems, taskP
 
   const statusLine = skillStatus || (hasSkills ? `已注入 ${skills.length} 个技能` : '未注入技能')
 
-  return `# Context Proxy Injection
+  return `# Xuanlin Overmind
 
 ## 当前任务
 ${userTask || '(未检测到)'}
