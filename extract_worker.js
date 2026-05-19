@@ -6,11 +6,11 @@ const ROOT = path.dirname(__filename)
 const { shouldSkipExtraction } = require(path.join(ROOT, 'privacy_filter'))
 const EPISODIC_DIR = path.join(ROOT, 'memory', 'episodic')
 const TRANSCRIPT_DIR = path.join(process.env.HOME || process.env.USERPROFILE, '.claude', 'projects', 'D--claude')
-const API_KEY = process.env.DEEPSEEK_API_KEY || ''
-const LOG_FILE = path.join(ROOT, 'hook.log')
+const API_KEY = process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || 'YOUR_DEEPSEEK_API_KEY'
+const LOG_FILE = path.join(ROOT, 'worker.log')
 const HERMES_PROMPT = fs.readFileSync(path.join(ROOT, 'HERMES_PROMPT.md'), 'utf-8')
-const POLL_INTERVAL = 10000
-const MIN_NEW_LINES = 50
+const POLL_INTERVAL = 30000
+const MIN_NEW_LINES = 25
 const MAX_LIFETIME = 8 * 60 * 60 * 1000
 
 if (!fs.existsSync(EPISODIC_DIR)) fs.mkdirSync(EPISODIC_DIR, { recursive: true })
@@ -22,15 +22,15 @@ function log(msg) {
 function callDeepSeek(messages) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
-      model: 'deepseek-chat',
+      model: 'deepseek-v4-flash',
       messages: messages,
-      max_tokens: 4096,
+      max_tokens: 16384,
       temperature: 0.1
     })
     const req = https.request({
       hostname: 'api.deepseek.com', path: '/v1/chat/completions', method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
-      timeout: 120000
+      timeout: 300000
     }, res => {
       let data = ''
       res.on('data', c => data += c)
@@ -130,25 +130,131 @@ ${getExistingKeys()}
         }
         if (fact.key && fact.content && fact.is_new !== false) {
           if (shouldSkipExtraction(fact.content)) { skipped++; continue }
-          index.saveSemantic(fact.key, fact.content, fact.category || 'general', sessionId)
-          saved++
+          if (index.saveSemantic(fact.key, fact.content, fact.category || 'general', sessionId, fact.dedup_key, fact.confidence || 0.5)) {
+            saved++
+          }
         }
       } catch(e) {}
     }
     if (skipped > 0) log(`privacy filter: skipped ${skipped} facts`)
     if (skillDrafts > 0) {
       log(`skill drafts created: ${skillDrafts}`)
-      // Trigger daemon re-index
       try {
         const { execSync } = require('child_process')
         execSync(`python -c "import sys; sys.path.insert(0,'${ROOT}'); from daemon import index_skills; print(f'Re-indexed: {len(index_skills())} skills')"`, { timeout: 10000 })
       } catch(e) {}
     }
-    return saved
+
+    // Regenerate injection.md with latest context
+    try {
+      const injectJS = path.join(ROOT, 'inject.js')
+      const { execSync } = require('child_process')
+      execSync(`node "${injectJS}"`, { timeout: 5000 })
+    } catch(e) {}
+
+    // ---- GRAPH: Extract relationships from conversation ----
+    try {
+      const graph = require(path.join(ROOT, 'graph'))
+      const allMems = index.getAllMemoryKeys()
+      if (allMems.length >= 5) {
+        const relPrompt = graph.buildExtractionPrompt(allMems, text)
+        const relResult = await callDeepSeek([{ role: 'user', content: relPrompt }])
+        if (relResult) {
+          const relations = graph.parseExtractionResult(relResult)
+          if (relations.length > 0) {
+            const added = graph.applyRelations(relations, sessionId)
+            log(`graph: extracted ${added} relations from ${relations.length} candidates`)
+          }
+        }
+      }
+    } catch(e) {
+      log(`graph extraction error: ${e.message}`)
+    }
+
+    // ---- SKILL PREFERENCE: Detect what skills were used for what tasks ----
+    try {
+      const allSkills = index.getAllSkills()
+      const validNames = allSkills.map(s => s.name)
+
+      const skillPrefPrompt = `Analyze this conversation. Detect when the user asked the assistant to use a specific skill for a task. The assistant may read skill files directly instead of using the Skill tool — look for skill names in the conversation.
+
+Output format: SKILL_PREF: <skill_name> | <task_scenario> | <effectiveness_0_to_1>
+
+Rules:
+- skill_name: the skill the user asked for or the assistant used, as written in the conversation
+- task_scenario: SHORT task category (2-8 Chinese chars). Generalize — "生成代码" not "写斐波那契", "逆向工程" not "破解某APP的AES", "安全分析" not "扫描SQL注入点". Be terse.
+- effectiveness: 0.9=completed, 0.7=partial, 0.3=failed
+- Output ONLY SKILL_PREF lines. Nothing else.
+- Output nothing if no skill was used.
+
+Conversation:
+${text.substring(0, 4000)}`
+
+      const prefResult = await callDeepSeek([{ role: 'user', content: skillPrefPrompt }])
+      if (prefResult) {
+        const prefLines = prefResult.split('\n').filter(l => l.startsWith('SKILL_PREF:'))
+        for (const line of prefLines) {
+          const m = line.match(/^SKILL_PREF:\s*(\S+)\s*\|\s*(.+?)\s*\|\s*([\d.]+)/)
+          if (m) {
+            let skillName = m[1].trim()
+            let taskPattern = m[2].trim()
+            const eff = parseFloat(m[3]) || 0.7
+
+            // Normalize: extract core task category
+            const clean = taskPattern.replace(/[的之地得和与了在是]/g, '').replace(/[a-zA-Z0-9_\-\.\/]+/g, '').trim()
+            const pair = clean.match(/(逆向|安全|代码|网络|系统|数据|性能|前端|后端|数据库|API|加密|合约|协议|内存|进程|流量|抓包|令牌|分析|编写|生成)(分析|工程|审查|审计|测试|调试|开发|配置|优化|代码|管理|检测|追踪|提取|破解|脚本)/)
+            if (pair) {
+              taskPattern = pair[0]
+            } else if (clean.length > 8) {
+              taskPattern = clean.substring(0, 8)
+            }
+
+            // Fuzzy match: find the closest real skill name
+            const matched = fuzzyMatchSkill(skillName, validNames)
+            if (matched) {
+              index.upsertSkillPref(matched, taskPattern, eff)
+            }
+          }
+        }
+        if (prefLines.length > 0) {
+          index.syncSkillPrefsToFile()
+          log(`skill_prefs: detected ${prefLines.length} usage patterns`)
+        } else {
+          log(`skill_prefs: API responded but no SKILL_PREF lines (${prefResult.substring(0, 100).replace(/\n/g, ' ')})`)
+        }
+      } else {
+        log(`skill_prefs: API returned empty response`)
+      }
+    } catch(e) {
+      log(`skill_pref extraction error: ${e.message}`)
+    }
+
+  return saved
   } catch(e) {
     log(`extract error: ${e.message}`)
     return 0
   }
+}
+
+function fuzzyMatchSkill(name, validNames) {
+  if (validNames.includes(name)) return name
+  const norm = (s) => s.toLowerCase().replace(/[-_\s]/g, '')
+  const target = norm(name)
+  for (const v of validNames) {
+    if (norm(v) === target) return v
+  }
+  for (const v of validNames) {
+    const nv = norm(v)
+    const ratio = Math.min(target.length, nv.length) / Math.max(target.length, nv.length)
+    if (ratio >= 0.4 && (nv.includes(target) || target.includes(nv))) return v
+  }
+  const aliases = {
+    'elonmask': 'elon-code', 'elonmusk': 'elon-code', 'elon': 'elon-code',
+    'superpower': 'using-superpowers', 'superpowers': 'using-superpowers',
+    'netanalyze': 'net-analyze', 'lateraljump': 'lateral-jump',
+  }
+  if (aliases[target]) return aliases[target]
+  return null
 }
 
 function getExistingKeys() {
@@ -163,6 +269,28 @@ function getExistingKeys() {
 
 // Main watch loop
 async function main() {
+  // Singleton guard — atomic PID file prevents race between workers
+  const pidFile = path.join(ROOT, '.worker.pid')
+  let pidFd = null
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      pidFd = fs.openSync(pidFile, 'wx')
+      fs.writeSync(pidFd, String(process.pid))
+      break
+    } catch(e) {
+      if (e.code === 'EEXIST') {
+        try {
+          const oldPid = parseInt(fs.readFileSync(pidFile, 'utf8'))
+          try { process.kill(oldPid, 'SIGTERM') } catch(e) {}
+        } catch(e) {}
+        try { fs.unlinkSync(pidFile) } catch(e) {}
+        require('child_process').execSync('sleep 0.05')
+      } else { log(`pid lock error: ${e.message}`); return }
+    }
+  }
+  if (!pidFd) { log('could not acquire PID lock, exiting'); return }
+  process.on('exit', () => { try { fs.closeSync(pidFd); fs.unlinkSync(pidFile) } catch(e) {} })
+
   log('worker started (watch mode)')
   const transcript = findCurrentTranscript()
   if (!transcript) { log('no transcript found'); return }
@@ -171,6 +299,9 @@ async function main() {
   let lastPos = fs.statSync(transcript.path).size
   let accumulatedLines = []
   let startTime = Date.now()
+  let lastContentTime = Date.now()
+  let lastConsolidationCheck = 0
+  const SESSION_IDLE_TIMEOUT = 15 * 60 * 1000
 
   const check = async () => {
     try {
@@ -178,6 +309,7 @@ async function main() {
       if (lines.length > 0) {
         accumulatedLines.push(...lines)
         lastPos = newPos
+        lastContentTime = Date.now()
       }
 
       const shouldExtract = accumulatedLines.length >= MIN_NEW_LINES ||
@@ -185,12 +317,28 @@ async function main() {
 
       if (shouldExtract && accumulatedLines.length > 0) {
         const sessionId = 'incr_' + Date.now()
+        const lineCount = accumulatedLines.length
         const saved = await extractAndSave(accumulatedLines, sessionId)
-        if (saved > 0) {
-          log(`incremental: ${saved} facts from ${accumulatedLines.length} lines`)
-          accumulatedLines = []
-        }
+        log(`incremental: ${saved} facts from ${lineCount} lines`)
+        accumulatedLines = []
         startTime = Date.now()
+      }
+
+      // Session end: transcript idle >15min → auto-consolidate
+      const idle = Date.now() - lastContentTime
+      if (idle > SESSION_IDLE_TIMEOUT && (Date.now() - lastConsolidationCheck) > SESSION_IDLE_TIMEOUT) {
+        lastConsolidationCheck = Date.now()
+        const { spawn } = require('child_process')
+        const cp = spawn('node', [path.join(ROOT, 'consolidate.js')], {
+          cwd: ROOT, timeout: 120000, stdio: 'pipe'
+        })
+        let out = ''
+        cp.stdout.on('data', c => out += c)
+        cp.on('close', code => {
+          if (code === 0) log(`session_end(worker): ${out.trim().substring(0, 200)}`)
+          else log(`session_end(worker): exit ${code}`)
+        })
+        cp.on('error', e => log(`session_end(worker) failed: ${e.message}`))
       }
     } catch(e) {
       log(`check error: ${e.message}`)

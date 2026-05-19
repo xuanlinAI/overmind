@@ -1,8 +1,8 @@
 {
-  "name": "context-proxy",
-  "version": "1.0.0",
-  "description": "外部记忆代理 — 跨会话分层记忆 + 技能调度 + 自进化。每次会话只注入 <1000 tokens 精简上下文。",
-  "author": "Claude Code User",
+  "name": "xuanlin-overmind",
+  "version": "2.0.0",
+  "description": "CC 的外挂认知引擎 — 五层记忆 · 知识图谱 · 推理 · 预警 · 自进化",
+  "author": "玄霖AI (xuanlinAI)",
   "hooks": {
     "SessionStart": [
       {
@@ -10,7 +10,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"D:/claude/context-proxy/inject.js\""
+            "command": "node \"<INSTALL_DIR>/inject.js\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"<INSTALL_DIR>/inject.js\""
           }
         ]
       }
@@ -21,17 +32,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"D:/claude/context-proxy/consolidate.js\""
+            "command": "node \"<INSTALL_DIR>/consolidate.js\""
           }
         ]
       }
     ]
   },
   "mcpServers": {
-    "context-proxy": {
+    "ctxproxy": {
       "type": "stdio",
-      "command": "node",
-      "args": ["C:/Users/Administrator/.claude/plugins/context-proxy/daemon.js"],
+      "command": "python",
+      "args": ["<INSTALL_DIR>/daemon.py"],
       "env": {}
     }
   }

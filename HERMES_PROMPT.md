@@ -41,7 +41,12 @@
 - 已经在记忆库里存在的内容（去重）
 - 对话中的客套话、过渡语
 - 纯技术废话（没有信息量的代码片段、日志输出等）
-- 临时状态（"正在打字"、"等一下"）
+- 临时状态（"正在打字"、"等一下"、"检查worker运行状态"）
+- **时间戳**、**临时文件路径**（/tmp、AppData/Temp）
+- **文件存在性**（"存在文件 X"、"file X exists"）
+- **测试清理操作**（"清理锁"、"clean lock before test"）
+- **对话流程标记**（"用户说继续"、"user says restarted"、"assistant performed X"）
+- **Worker/插件内部统计**（"mem_size"、"full_catalog_size"、"total_skills"）
 - **隐私信息：手机号、真实姓名、身份证号、家庭地址、API密钥值、access_token值**
 
 ## 输出格式
@@ -49,7 +54,9 @@
 每提取一条，输出一行 JSON：
 
 事实类：
-{"key": "唯一标识_英文", "content": "完整事实", "category": "类别", "confidence": 0.0-1.0, "is_new": true/false}
+{"key": "唯一标识_英文", "content": "完整事实", "category": "类别", "confidence": 0.0-1.0, "is_new": true/false, "dedup_key": "去重关键词_小写英文"}
+
+dedup_key 规则：提取 content 的核心主题，5-15 个词的英文小写。例如 "用户喜欢 VS Code 暗色主题" → "user prefers dark theme vscode"。用于语义去重判断。相同 dedup_key 的记忆只保留置信度最高的一条。
 
 技能草稿类（发现可复用工作流时）：
 {"type": "procedural", "name": "skill-name", "trigger": "何时触发", "steps": ["步骤1","步骤2","步骤3"]}

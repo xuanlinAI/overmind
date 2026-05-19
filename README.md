@@ -1,182 +1,257 @@
-# Context Proxy — Claude Code 外挂记忆插件
+# Xuanlin Overmind
 
 <p align="center">
-  <a href="https://github.com/xuanlinAI/context-proxy/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
-  <a href="https://github.com/xuanlinAI/context-proxy/stargazers"><img src="https://img.shields.io/github/stars/xuanlinAI/context-proxy" alt="Stars"></a>
-  <a href="https://github.com/xuanlinAI/context-proxy"><img src="https://img.shields.io/badge/version-1.0.0-green.svg" alt="Version"></a>
-  <a href="https://github.com/xuanlinAI/context-proxy"><img src="https://img.shields.io/badge/platform-Claude%20Code-orange.svg" alt="Platform"></a>
+  <b>CC 的外挂认知引擎</b><br>
+  五层记忆 · 知识图谱 · 推理 · 预警 · 自进化
 </p>
 
 <p align="center">
-  <b>Claude Code 的 Hermes 风格长期记忆系统</b><br>
-  跨会话记忆 · AI 自动提炼 · 上下文蒸馏 · 技能强制调度
-</p>
-
-<p align="center">
-  <a href="#中文">🇨🇳 中文</a> | <a href="#english">English</a>
+  不只是记忆，是推理。
 </p>
 
 ---
 
-<span id="中文"></span>
-
-# 🇨🇳 中文
-
 ## 这是什么
 
-Context Proxy 是一个 Claude Code 外挂插件，赋予 CC **真正的长期记忆能力**。重启后不再失忆——项目进展、技术决策、你的编码偏好、工具配置、甚至日常闲聊和情绪反馈，全部持久化并可跨会话检索。
+Xuanlin Overmind 给 Claude Code 加装了一层完整的认知系统。它不是插件——它是引擎。
 
-**核心理念：** 一个独立的后台 AI 持续监听你的对话，自动提炼有价值的信息，在每次新会话开始时注入精简的上下文——你不需要手动记任何东西。
+CC 原生能力：对话关闭，记忆归零。下次打开，从零开始。
 
-## 解决什么问题
+安装后：
+- **记忆不灭** — 跨会话持久化，自动提炼关键事实
+- **知识推理** — 记忆之间自动建立因果图，搜一个带出一串
+- **主动预警** — 检测到你正在重复之前的失败模式，拦住你
+- **技能学习** — 观察你爱在什么场景用什么技能，下次自动推荐
+- **自我进化** — 低效记忆自动淘汰，冲突记忆自动合并，模式自动晋升
 
-| 痛点 | 原生 Claude Code | 安装 Context Proxy 后 |
-|------|-----------------|----------------------|
-| 重启后记忆 | 完全丢失，每次从零开始 | 跨会话持久化，自动注入上次对话的关键知识 |
-| CLAUDE.md 膨胀 | 路由规则越写越长（常见 200+ 行） | 精简到 5 行核心规则 |
-| Skill 描述加载 | 每轮对话加载 100+ 个 Skill 的完整描述 | CC 不加载 Skill 描述，改为外挂按需推荐 2-3 个 |
-| 上下文浪费 | 40%+ 的上下文被固定规则和无关 Skill 占据 | 上下文几乎全部用于实际任务 |
-| Skill 使用率 | 依赖用户手动查找和调用 | 外挂 AI 自动匹配并强制调用 |
-| 知识积累 | 有价值的讨论、决策、踩坑记录全部丢失 | 自动提取并存入可检索的记忆库 |
+---
 
-## 功能详解
+## 核心系统
 
-### 1. 三层持久记忆
+### 五层记忆
 
-记忆系统按照从具体到抽象的层次组织，每一层有不同的生命周期和用途。
+| 层级 | 技术 | 说明 |
+|------|------|------|
+| 语义记忆 | SQLite + FTS5 + jieba | 技术事实、决策、偏好，全文检索 |
+| 程序性记忆 | 自动晋升 | 可复用工作流模板，同一模式出现 3 次自动生成 |
+| 情景记忆 | JSON 存档 | 每次会话的完整摘要，AI 自动生成 |
+| 知识图谱 | graph.db | 10 种关系类型，子图遍历，因果推理 |
+| 反馈闭环 | 注入→引用→效果 | 全链路追踪记忆效果，自动淘汰低效记忆 |
 
-**语义层（长期事实）**
-- 存储位置：SQLite 数据库，FTS5 全文索引 + jieba 中文分词
-- 存储内容：技术事实、API 端点、配置细节、用户偏好、项目决策、踩坑记录
-- 检索速度：3-4ms（纯函数）/ ~80ms（MCP 端到端），O(log n) 不随数据量线性增长
-- 生命周期：永久，但会经历自信度衰减（30 天未访问 ×0.9）
+### 知识图谱（10 种关系）
 
-**程序性层（可复用模板）**
-- 存储位置：SQLite procedural 表
-- 存储内容：可复用的操作工作流——名称、触发条件、步骤序列
-- 生成条件：同一操作模式出现 3 次以上，或语义记忆中相似内容超过阈值
-- 技能草稿：外挂 AI 检测到工作流后自动生成 SKILL.md 文件
+`depends_on` · `part_of` · `blocked_by` · `causes` · `solves` · `related_to` · `extends` · `conflicts_with` · `alternative_to` · `triggers`
 
-**情景层（对话存档）**
-- 存储位置：文件系统，`memory/episodic/` 目录
-- 存储内容：每次会话的完整对话摘要和关键片段
-- 用途：回溯历史、寻找过去的上下文、训练记忆提炼
+Worker 自动从对话中提取关系建边。注入时，选中的记忆沿图谱扩展——你不问它也给。
 
-### 2. AI 自动提炼（Worker 系统）
+### 被动知识推理
 
-Worker 是一个独立的后台进程，由 SessionStart Hook 自动生成，持续运行 8 小时。
+这是 Overmind 最独特的隐性能力。工人从对话里自动提取关系，搜到一条记忆时图自动展开关联：
 
-**工作流程：**
 ```
-会话进行中，CC 将对话写入 JSONL 文件
-    ↓
-Worker 每 10 秒检测文件大小变化
-    ↓
-积累 ≥50 行新对话 或 60 秒无新写入且有数据
-    ↓
-调用 DeepSeek API（默认 deepseek-chat，可配置）
-    ↓
-按照 HERMES_PROMPT.md 中的 10 类分类体系提取
-    ↓
-隐私过滤（手机号、地址、API 密钥值）
-    ↓
-写入语义记忆 + 程序性模板 + 技能草稿
+"jhsgvYT0 token 签名未知"
+  → OAuth 绕过未解决        (blocked_by)
+  → RS VM 字节码 235KB      (part_of)
+  → mitmproxy 抓了 76 个 token (triggers)
 ```
 
-**10 个提取类别：**
-1. **技术事实** — API 端点完整 URL、端口号、文件路径、加密算法、配置参数
-2. **用户环境** — 安装的软件、版本号、操作系统、网络配置、代理设置
-3. **用户偏好** — 编码风格、沟通偏好、工具选择习惯、部署偏好
-4. **项目信息** — 项目目标、当前阶段、甲方信息、预期收益、阻塞问题
-5. **人物关系** — 提到的角色、特征、与用户的关系
-6. **日常与情绪** — 心情、满意度、对什么不满意、有什么计划
-7. **决策与原因** — 做了哪些选择、为什么选、放弃了什么方案
-8. **知识碎片** — 概念解释、命令用法、工具存在、网站用途
-9. **时间地点** — 时间节点、截止日期、周期
-10. **数字与金额** — 任何具体数字
+这不是记忆搜索，这是推理。你没设计推荐引擎，但每次注入都是一次基于图的联想检索。
 
-### 3. 上下文蒸馏
+### 主动预警
 
-**CLAUDE.md 精简**
-- 删除所有静态路由规则、Skill 映射表、优先级列表
-- 保留 5 行核心规则：外挂管理声明、D 盘安装约束、操作确认规则、技能强制调用规则
-- 路由逻辑从"查映射表→调 Skill"改为"看 injection.md 推荐→调 Skill"
+检测到当前任务命中已知的危险路径时，在注入文档中生成 ⚠️ 危险信号：
 
-**Skill 描述去重**
-- CC 原生行为：扫描所有 Skill 目录，每轮对话注入所有 Skill 的完整描述
-- 改造后：将所有 Skill 文件移出 CC 扫描路径，存入外挂目录
-- 外挂替代：启动时检索当前任务最相关的 2-3 个 Skill，注入带核心指令摘要的描述
-- 会话中：通过 MCP 工具 `list_skills` 按需搜索任意 Skill
+- 🔴 失败模式 — 曾因同一原因失败 N 次
+- ⚠️ 阻塞风险 — 关键节点仍未解决
+- ⚡ 潜在冲突 — 两个方案互斥
 
-**注入格式（injection.md）:**
+### 自进化
+
+- **Hermes Fusion** — 衰减+晋升+去重+AI 进化（pro 模型审查高价值记忆，自动合并/淘汰/生成工作流）
+- **自信度系统** — 30 天未访问衰减，高效记忆自动晋升
+- **技能评分** — invoke_count + recency → quality_score，低效技能自动归档
+- **有效期淘汰** — 注入多次无效的记忆自动淘汰
+
+### 优雅降级
+
+每层都有 fallback，不是设计出来的，是实战磨出来的韧性：
+
+- flash AI 超时 → 关键词兜底
+- Skill 工具失败 → 自动读文件执行
+- SessionEnd Hook 不触发 → Worker 15 分钟空闲自动 consolidate
+- 技能偏好冷启动 → 手动种子 + AI 自动积累
+
+### 其他隐性能力
+
+- **跨 CC 窗口技能同步** — Worker 读同一份对话文件，多个 CC 窗口的技能使用互相同步
+- **噪音自净化** — 隐私过滤 + 模糊匹配 + 归一化 + 有效期淘汰 = 自动清洗
+- **对话考古** — 情景记忆 + 图谱边，能追溯 bug 是怎么一步步被发现的
+- **自训练闭环** — Worker 检测 → skill_prefs 积攒 → 技能 AI 选择越来越准
+
+---
+
+## 架构
+
+```
+inject.js ──→ injection.md ──→ CC 读取执行
+    │              │
+    ├─ Phase 0: 图谱预警 (本地, 0ms)
+    ├─ Phase 1: lite 注入 (关键词, 0 API)
+    ├─ Phase 2: flash AI 三路并行
+    │     ├─ 技能选择 (关键词预筛→AI精选)
+    │     ├─ 记忆精选 (bigram预筛→AI精选)
+    │     └─ 任务分解
+    └─ Phase 3: full 注入 (图扩展+反馈+技能)
+
+Worker (30s cycle)
+    ├─ 记忆提取 → memory.db
+    ├─ 关系提取 → graph.db
+    ├─ 技能偏好 → skill_prefs
+    └─ SessionEnd 检测
+
+daemon.py (18 MCP 工具)
+    ├─ 记忆/技能/图谱 CRUD
+    ├─ 自进化 (hermes_fusion)
+    ├─ 预警查询 (search_warnings)
+    └─ 反馈追踪 (record_feedback)
+```
+
+---
+
+## 安装
+
+### 1. 克隆
+
+```bash
+git clone https://github.com/xuanlinAI/overmind.git
+cd overmind
+```
+
+### 2. 依赖
+
+```bash
+pip install jieba
+npm install
+```
+
+### 3. 配置 API Key
+
+```bash
+# 设置环境变量（推荐）
+export DEEPSEEK_API_KEY=sk-xxx
+
+# 或直接改各文件中的 YOUR_DEEPSEEK_API_KEY 为你的 key
+# inject.js, extract_worker.js, consolidate.js, daemon.py
+```
+
+### 4. 注册插件
+
+编辑 `~/.claude/settings.json`，加入：
+
+```json
+{
+  "mcpServers": {
+    "ctxproxy": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["/你的路径/overmind/daemon.py"],
+      "env": {}
+    }
+  }
+}
+```
+
+同时在 `~/.claude/.claude.json` 的 `mcpServers` 中也加入同样的配置。
+
+### 5. 注册 Hooks
+
+编辑 `~/.claude/settings.json`，找到 `hooks` 字段（没有则创建），加入：
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/你的路径/overmind/inject.js\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/你的路径/overmind/inject.js\""
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/你的路径/overmind/consolidate.js\""
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### 6. 配置 CLAUDE.md
+
+删除 `~/.claude/CLAUDE.md` 中所有路由规则、Skill 映射表、效率规则。只保留：
+
 ```markdown
-## 当前任务
-{从对话记录中提取的用户第一条消息}
+所有长期记忆及技能由 Overmind 管理。
+安装到你的安装路径。中文回复。
+当 injection.md 推荐技能时，必须用 Skill 工具调用，禁止手动替代。
+执行前需确认的操作：安装/卸载软件包、系统配置修改、删除文件、Git 强制操作。
 
-## 项目上下文
-{工作目录、顶层文件列表}
-
-## 强制技能调用 — 以下技能必须用 Skill 工具执行，禁止手动替代
-- /skill-name — 调用方式: Skill({skill: "skill-name"})
-  {技能描述}
-  {核心指令摘要}
-
-## 相关记忆
-- {记忆1}
-- {记忆2}
-
-## 状态
-语义N条 技能N个 情景N个
+!include /你的路径/overmind/injection.md
 ```
 
-### 4. 技能使用率提升
+### 7. 重启 Claude Code
 
-插件通过三个机制确保技能被有效使用：
+---
 
-**机制一：强制调用指令**
-- 外挂 AI 匹配到技能后，injection.md 中的格式为"**强制技能调用** —— 必须用 Skill 工具执行，禁止手动替代"
-- 每条技能附有调用代码：`Skill({skill: "name"})`
-- CLAUDE.md 中规定："当 injection.md 推荐技能时，必须用 Skill 工具调用"
+## 效率最大化指南
 
-**机制二：动态技能搜索**
-- MCP 工具 `list_skills` 支持多词加权检索（113 个技能）
-- 查询词命中技能名称/触发词：+3 分；命中描述：+1 分；部分匹配：+0.5 分
-- 结果按分数降序返回，最相关的排在最前
+### Skill 文件迁移
 
-**机制三：技能草稿自动生成**
-- Worker 在提取过程中检测可复用工作流
-- 输出格式为 `{"type": "procedural", "name": "...", "trigger": "...", "steps": [...]}`
-- Worker 自动将草稿写入 `skills/all/{name}.md` 文件
-- 写入后触发 daemon 重索引，新技能立即可用
+CC 会自动扫描 `~/.claude/skills/` 下的所有 SKILL.md 并加载完整描述到每轮对话。上百个 skill 会浪费大量上下文。
 
-### 5. 自进化系统
+**做法：**
 
-**自信度评分**
-- 每次访问：confidence + 0.03（上限 1.0）
-- 30 天未访问：confidence × 0.9
-- 自信度 > 0.5 且访问 ≥2 次：触发自动晋升
+1. 把你的所有 SKILL.md 复制到 `overmind/skills/all/` 目录下
+2. 把 `~/.claude/skills/` 重命名为 `~/.claude/skills_bak/`
+3. CC 不再加载 skill 描述，Overmind 按需推荐最相关的 2-3 个
 
-**自动晋升**
-- 语义记忆满足晋升条件 → promotion_count +1，confidence +0.1
-- 所有晋升事件记录到 evolution_log
+```bash
+# 复制技能
+cp ~/.claude/skills/*/SKILL.md overmind/skills/all/
+# 禁用 CC 原生加载
+mv ~/.claude/skills ~/.claude/skills_bak
+```
 
-**记忆融合（Hermes Fusion）**
-- 每次调用 `hermes_fusion` 工具（或自动触发）：
-  - 相似记忆合并去重（相同 key 前缀）
-  - 衰减低活跃记忆
-  - 触发晋升检查
-- 融合日志完整记录
+### 首次启动优化
 
-### 6. 模型无关
+- 第一轮对话注入较慢（AI 正在选择技能和记忆），后续每轮约 4-36 秒
+- 技能偏好在 5-10 次会话后会达到较好匹配率
+- 自进化在积累 1000+ 条记忆后效果明显
 
-插件设计为与模型无关——只要目标 API 支持聊天补全格式即可使用。
+### 模型选择
 
-**默认配置（DeepSeek）：**
-- 提取模型：deepseek-chat（性价比高，3-5 秒返回）
-- 注入模型（可选）：deepseek-v4-pro[1m]（更强推理）
-
-**切换到其他模型：**
-只需修改 `inject.js` 和 `extract_worker.js` 中的 API 端点和模型名：
+默认使用 DeepSeek（性价比最高）。切换到 OpenAI 或 Anthropic：改 `inject.js` 和 `extract_worker.js` 中的 API 端点即可。
 
 ```javascript
 // OpenAI
@@ -188,280 +263,67 @@ model: 'gpt-4o',
 hostname: 'api.anthropic.com',
 path: '/v1/messages',
 model: 'claude-sonnet-4-20250514',
-
-// 任何 OpenAI 兼容接口（Ollama、vLLM、LocalAI 等）
-hostname: 'localhost',
-path: '/v1/chat/completions',
-model: 'llama3',
 ```
 
-### 7. MCP 工具（9 个）
+### 手动种子技能偏好
 
-| 工具 | 功能 | 参数 |
-|------|------|------|
-| `search_memory` | 检索语义记忆 | query, limit |
-| `save_memory` | 手动保存记忆 | key, content, tags |
-| `list_skills` | 搜索技能 | query |
-| `create_skill` | 创建 SKILL.md | name, description, content |
-| `memory_stats` | 记忆统计 | - |
-| `hermes_fusion` | 融合清理 | - |
-| `search_procedural` | 搜索程序性模板 | query |
-| `search_episodes` | 搜索会话历史 | query |
-| `save_episodic` | 保存会话记录 | session_id, summary, task |
-
-### 8. 隐私保护
-
-- **提示词层：** `HERMES_PROMPT.md` 明确要求"不提取隐私信息"
-- **代码层：** `privacy_filter.js` 正则过滤手机号、地址、API 密钥值、身份证号
-- **存储层：** 所有数据本地 SQLite，不上传云端
-
-## Token 消耗分析
-
-### 每轮对话
-
-| 项目 | 原生 CC | 安装插件后 | 节省 |
-|------|---------|-----------|------|
-| CLAUDE.md 规则 | ~2000 tokens | ~50 tokens | ~1950 |
-| Skill 描述 | ~5000+ tokens | ~100 tokens | ~4900 |
-| injection.md 注入 | 0 | ~800 tokens | -800 |
-| **每轮净节省** | | | **~6000 tokens** |
-
-一次 20 轮的对话可节省约 **120,000 tokens** 的上下文配额。
-
-### Worker 提取成本
-
-每次增量提取：
-- 输入：~15,000 tokens（对话片段）
-- 输出：~4,000 tokens（提取结果）
-- 成本：约 $0.04（DeepSeek 定价）
-- 频率：每 50 行新对话触发一次
-
-## 安装
-
-### 前置要求
-- Python 3.10+（用于 daemon MCP 服务）
-- Node.js 18+（用于 hook 脚本）
-- DeepSeek API key（或其他模型 API key）
-- Claude Code（已配置）
-
-### 步骤
+如果 Worker 还没积累足够的偏好数据，可以直接设置：
 
 ```bash
-# 1. 克隆仓库
-git clone https://github.com/xuanlinAI/context-proxy.git
-cd context-proxy
-
-# 2. 安装依赖
-pip install jieba
-npm install
-
-# 3. 配置 API key
-cp .env.example .env
-# 编辑 .env 文件：
-# DEEPSEEK_API_KEY=sk-你的key
-
-# 4. 注册 MCP 服务
-# 在 ~/.claude/settings.json 的 mcpServers 中添加：
-# "ctxproxy": {
-#   "type": "stdio",
-#   "command": "python",
-#   "args": ["D:/你的路径/context-proxy/daemon.py"],
-#   "env": {}
-# }
-
-# 5. 更新 CLAUDE.md
-# 在 ~/.claude/CLAUDE.md 中只保留：
-# ---
-# 所有长期记忆及技能由外挂 Context Proxy 管理。
-# 安装到 D 盘。中文回复。
-# 当 injection.md 推荐技能时，必须用 Skill 工具调用，禁止手动替代。
-# 执行前需确认的操作：安装/卸载软件包、系统配置修改、删除文件、Git 强制操作。
-# !include D:/你的路径/context-proxy/injection.md
-# ---
-
-# 6. 重启 Claude Code
+# 在 overmind 目录下
+节点 -e "
+const i = require('./index'); i.init();
+i.upsertSkillPref('你的技能名', '任务场景', 0.9);
+i.syncSkillPrefsToFile();
+"
 ```
 
-### 同时更新 .claude.json
+---
 
-CC 同时读取 `.claude.json` 和 `settings.json` 的 MCP 配置。确保两处都有 ctxproxy 注册。
+## MCP 工具（18 个）
 
-## 安装后最佳实践
+| 工具 | 用途 |
+|------|------|
+| `search_memory` | FTS5 全文检索，可选 AI 语义精选 |
+| `save_memory` | 手动保存语义记忆 |
+| `list_skills` | 关键词检索技能库 |
+| `create_skill` | 创建新 SKILL.md |
+| `memory_stats` | 记忆库统计 |
+| `current_context` | 查看当前注入的上下文 |
+| `hermes_fusion` | 手动触发自进化 |
+| `search_procedural` | 搜索程序性模板 |
+| `search_episodes` | 搜索历史会话 |
+| `save_episodic` | 保存会话记录 |
+| `search_graph` | 图谱搜索，返回关系子图 |
+| `expand_keys` | 记忆 key → 图谱扩展 |
+| `create_edge` | 手动建立关系边 |
+| `graph_stats` | 图谱统计 |
+| `search_warnings` | 检测当前任务的危险信号 |
+| `record_feedback` | 记录记忆使用反馈 |
+| `skill_rankings` | 技能效果排行榜 |
+| `skill_prefs` | 查询技能使用偏好 |
 
-### 1. 清空 CLAUDE.md
+---
 
-删除 CLAUDE.md 中所有路由规则（§0-§8）、Skill 映射表、效率规则。外挂 injection.md 会动态注入当前任务相关信息。只保留核心约束。
+## FAQ
 
-### 2. 转移 Skill 文件
+**会影响 CC 启动速度吗？**
+注入阶段 0 API 延迟（lite 版），AI 选择在后台异步运行。
 
-CC 会自动扫描以下目录并加载所有 SKILL.md 描述：
-- `~/.claude/skills/`
-- `~/.claude/plugins/cache/*/skills/`
-- `~/.claude/plugins/marketplaces/*/plugins/*/skills/`
+**数据存在哪？**
+全部本地 — memory.db + graph.db + memory/ 目录。不上传云端。
 
-把这些目录重命名或移走，CC 就不再加载这些 Skill 描述。外挂已将所有 Skill 复制到自己的 `skills/all/` 目录并建立索引。
+**隐私怎么保护？**
+双层过滤：HERMES_PROMPT 不提取 + 代码正则拦截。数据全本地。
 
-```bash
-# 备份自定义 Skill
-mv ~/.claude/skills ~/.claude/skills_bak
+**支持其他 AI 模型吗？**
+支持任何 OpenAI 兼容 API。模型无关，改端点即可。
 
-# 移走插件缓存中的 Skill 目录
-find ~/.claude/plugins/cache -type d -name "skills" -exec mv {} {}_bak \;
-find ~/.claude/plugins/marketplaces -type d -name "skills" -exec mv {} {}_bak \;
-```
+**怎么备份？**
+复制 `memory.db`、`graph.db`、`memory/` 目录。
 
-### 3. 配置模型 API
-
-在 `.env` 文件中设置：
-
-```bash
-# DeepSeek（默认，推荐性价比）
-DEEPSEEK_API_KEY=sk-你的key
-
-# 如果用 OpenAI，改 inject.js 和 extract_worker.js 中的 API 地址
-# 如果用 Anthropic，改端点为 /v1/messages 并加 anthropic-version header
-# 如果用本地模型，指向 localhost 的 OpenAI 兼容接口
-```
-
-### 4. 自定义提示词
-
-`HERMES_PROMPT.md` 完整控制了外挂 AI 的提取行为。你可以修改：
-- 添加新的提取类别（如"安全漏洞""性能瓶颈"）
-- 调整提取粒度（更多细节 vs 更精简）
-- 修改隐私过滤规则
-- 调整输出格式
-
-修改后重启 CC，下次 Worker 提取就会用新规则。
-
-### 5. 随时清空上下文
-
-所有对话内容已被外挂 AI 提炼存入记忆库。你可以放心使用 `/clear` 清空上下文——下次会话会自动从记忆库注入相关知识。不需要保留长对话来"记住"讨论过的内容。
-
-### 6. 调整 Worker 行为
-
-`extract_worker.js` 头部有可调参数：
-```javascript
-const POLL_INTERVAL = 10000    // 检测间隔（毫秒），默认 10 秒
-const MIN_NEW_LINES = 50       // 最少新行数才触发提取
-const MAX_LIFETIME = 8*60*60*1000  // Worker 存活时间，默认 8 小时
-```
-
-## 文件结构
-
-```
-context-proxy/
-├── README.md              # 本文档
-├── LICENSE                # MIT 许可证
-├── .env.example           # 环境变量模板
-├── .gitignore             # Git 忽略规则
-├── HERMES_PROMPT.md       # 外挂 AI 提示词（核心——控制提取行为）
-├── plugin.json            # CC 插件描述
-│
-├── daemon.py              # MCP 服务（Python）—— 9 个工具
-├── index.js               # 核心逻辑（Node.js）—— SQLite + FTS5
-├── inject.js              # SessionStart Hook —— 生成 injection.md
-├── extract_worker.js      # 后台提取 Worker —— 增量监听+AI 提取
-├── consolidate.js         # SessionEnd Hook —— 情景记录+融合
-├── privacy_filter.js      # 隐私过滤器
-│
-├── install.js             # 一键安装脚本
-├── daemon.js              # Node.js MCP 备选（不推荐——CC 有兼容问题）
-├── package.json           # Node.js 依赖声明
-│
-└── skills/                # 技能目录（不被 CC 扫描——由外挂管理）
-    └── all/               # 平铺的所有 SKILL.md 文件
-```
-
-## 常见问题
-
-**Q: 会影响 CC 启动速度吗？**
-A: SessionStart 注入阶段 ~0.2 秒（纯本地计算，无 API 调用）。Worker 在后台异步启动，不阻塞。
-
-**Q: 记忆数据存在哪？**
-A: 全部本地——SQLite 数据库 `memory.db` + 文件系统 `memory/episodic/`。不上传任何云端。
-
-**Q: 支持中文吗？**
-A: 全文支持。FTS5 + jieba 中文分词，检索精度和英文同级。
-
-**Q: 怎么备份记忆？**
-A: 复制 `memory.db` 和 `memory/` 目录即可。
-
-**Q: 可以用其他 AI 模型吗？**
-A: 支持任何 OpenAI 兼容 API。改 `inject.js` 和 `extract_worker.js` 中的 API 端点即可。
-
-**Q: 隐私数据怎么保护？**
-A: 双层过滤：提示词层不提取 + 代码层正则拦截。所有数据本地存储。
+---
 
 ## 许可证
 
-MIT License — 随意使用、修改、商用。只需保留版权声明。
-
----
-
-<span id="english"></span>
-
-# 🇬🇧 English
-
-## What is this
-
-Context Proxy is a Claude Code plugin that adds **genuine long-term memory**. No more amnesia after CC restarts — project progress, technical decisions, coding preferences, tool configurations, even casual chats and emotional feedback are all persisted and searchable across sessions.
-
-**Core concept:** A background AI continuously monitors your conversations, automatically extracts valuable information, and injects distilled context at the start of each new session — you never need to manually record anything.
-
-## Problems Solved
-
-| Pain Point | Vanilla CC | With Context Proxy |
-|------------|-----------|-------------------|
-| Memory after restart | Completely lost, start from zero | Persisted across sessions, auto-injected |
-| CLAUDE.md bloat | Hundreds of routing rules | 5 core lines |
-| Skill description loading | 100+ full descriptions every turn | CC loads none, proxy recommends 2-3 |
-| Context waste | 40%+ static rules/descriptions | Context goes to actual work |
-| Skill usage rate | Manual lookup required | AI auto-matches + mandatory invocation |
-| Knowledge accumulation | Valuable discussions lost | Auto-extracted into searchable memory |
-
-## Core Capabilities
-
-### Three-Layer Memory
-- **Semantic:** SQLite + FTS5 + jieba, O(log n) search, 3-4ms latency
-- **Procedural:** Reusable workflow templates, auto-generated from patterns
-- **Episodic:** Full conversation archives on filesystem
-
-### AI Auto-Extraction
-- Background Worker monitors conversation in real-time
-- Triggers every ~50 new lines with 10 extraction categories
-- Privacy filter blocks personal data before storage
-
-### Context Distillation
-- CLAUDE.md: 260+ lines → 5 lines
-- Skills: 100+ pre-loaded → 2-3 on-demand with core instructions
-- ~6000 tokens saved per conversation turn
-
-### Model-Agnostic
-Works with any OpenAI-compatible API. Swap one config to switch between DeepSeek, OpenAI, Anthropic, or local models.
-
-### 9 MCP Tools
-`search_memory` `save_memory` `list_skills` `create_skill` `memory_stats` `hermes_fusion` `search_procedural` `search_episodes` `save_episodic`
-
-## Quick Start
-
-```bash
-git clone https://github.com/xuanlinAI/context-proxy.git
-cd context-proxy
-pip install jieba && npm install
-cp .env.example .env  # add your API key
-# Register in ~/.claude/settings.json as MCP server
-# Add !include to ~/.claude/CLAUDE.md
-# Restart CC
-```
-
-See the Chinese section above for detailed installation steps and best practices.
-
-## License
-
-MIT — do whatever you want. Just keep the copyright notice.
-
----
-
-<p align="center">
-  Made by <a href="https://github.com/xuanlinAI">玄霖AI (xuanlinAI)</a>
-</p>
+MIT — 玄霖AI (xuanlinAI)
