@@ -1,6 +1,10 @@
 # Xuanlin Overmind
 
 <p align="center">
+  <a href="#中文">🇨🇳 中文</a> | <a href="#english">English</a>
+</p>
+
+<p align="center">
   <b>CC 的外挂认知引擎</b><br>
   五层记忆 · 知识图谱 · 推理 · 预警 · 自进化
 </p>
@@ -10,6 +14,8 @@
 </p>
 
 ---
+
+<span id="中文"></span>
 
 ## 这是什么
 
@@ -330,7 +336,13 @@ MIT — 玄霖AI (xuanlinAI)
 
 ---
 
+<span id="english"></span>
+
 # 🇬🇧 English
+
+<p align="center">
+  <a href="#中文">🇨🇳 中文</a> | <a href="#english">English</a>
+</p>
 
 ## What is this
 
