@@ -327,3 +327,266 @@ i.syncSkillPrefsToFile();
 ## 许可证
 
 MIT — 玄霖AI (xuanlinAI)
+
+---
+
+# 🇬🇧 English
+
+## What is this
+
+Xuanlin Overmind adds a complete cognitive layer to Claude Code. It's not a plugin — it's an engine.
+
+Vanilla CC: close the session, memory goes to zero. Start fresh every time.
+
+With Overmind:
+- **Memory persists** — cross-session with automatic fact extraction
+- **Knowledge reasoning** — auto-built causal graph between memories, search one brings up the chain
+- **Proactive warnings** — detects repeated failure patterns, warns before you hit the same wall
+- **Skill learning** — observes what skills you use for what tasks, recommends accordingly
+- **Self-evolution** — ineffective memories decay, conflicting ones merge, patterns auto-promote
+
+**Not just memory. Reasoning.**
+
+## Core Systems
+
+### Five-Layer Memory
+
+| Layer | Tech | Purpose |
+|-------|------|---------|
+| Semantic | SQLite + FTS5 + jieba | Technical facts, decisions, preferences — full-text search |
+| Procedural | Auto-promotion | Reusable workflow templates, generated from repeated patterns |
+| Episodic | JSON archives | Complete session summaries, AI-generated |
+| Knowledge Graph | graph.db | 10 relation types, subgraph traversal, causal reasoning |
+| Feedback Loop | Full pipeline tracking | Injection → reference → outcome, auto-prunes ineffective memories |
+
+### Knowledge Graph (10 relations)
+
+`depends_on` · `part_of` · `blocked_by` · `causes` · `solves` · `related_to` · `extends` · `conflicts_with` · `alternative_to` · `triggers`
+
+The worker auto-extracts relationships from conversations. During injection, selected memories expand through the graph — related knowledge you didn't ask for surfaces automatically.
+
+### Passive Knowledge Reasoning
+
+Overmind's most unique emergent capability. The worker builds relational edges during extraction. When you search for a memory, the graph expands to reveal causal chains:
+
+```
+"token signature unknown"
+  → OAuth bypass unresolved          (blocked_by)
+  → VM bytecode 235KB                (part_of)
+  → mitmproxy captured 76 tokens     (triggers)
+```
+
+This is not memory search. This is reasoning.
+
+### Proactive Guard
+
+When the graph detects you're approaching known failure paths, injection docs include ⚠️ warnings:
+
+- 🔴 Failure pattern — same cause failed N times before
+- ⚠️ Blocked — critical dependency still unresolved
+- ⚡ Conflict — two approaches are mutually exclusive
+
+### Self-Evolution
+
+- **Hermes Fusion** — decay + promotion + dedup + AI evolution (pro model reviews top memories, auto-merges/deprecates/generates workflows)
+- **Confidence scoring** — 30-day decay, high-confidence auto-promotion
+- **Skill scoring** — invoke_count + recency → quality_score, low-quality skills auto-archived
+- **Effectiveness pruning** — memories injected multiple times but never helped get removed
+
+### Graceful Degradation
+
+Every layer has a fallback — not by design, but forged through real-world use:
+
+- flash AI timeout → keyword fallback
+- Skill tool fails → auto-reads skill file and executes instructions
+- SessionEnd hook unreliable → worker auto-detects 15min idle and consolidates
+- Skill prefs cold start → manual seeding + AI auto-accumulation
+
+### Other Emergent Capabilities
+
+- **Cross-window skill sync** — multiple CC windows share one transcript, skills sync automatically
+- **Noise self-cleaning** — privacy filter + fuzzy matching + normalization + pruning = automatic data quality
+- **Conversation archaeology** — episodic memory + graph edges trace how bugs were discovered step by step
+- **Self-training loop** — worker detection → skill_prefs accumulation → AI selection gets better over time
+
+## Architecture
+
+```
+inject.js ─→ injection.md ─→ CC reads and executes
+    │
+    ├─ Phase 0: Graph warnings (local, 0ms)
+    ├─ Phase 1: Lite injection (keywords, 0 API)
+    ├─ Phase 2: flash AI — 3 parallel calls
+    │     ├─ Skill selection (keyword pre-filter → AI pick)
+    │     ├─ Memory selection (bigram pre-filter → AI pick)
+    │     └─ Task decomposition
+    └─ Phase 3: Full injection (graph expand + feedback + skills)
+
+Worker (30s cycle)
+    ├─ Extract memories → memory.db
+    ├─ Extract relations → graph.db
+    ├─ Detect skill prefs → skill_prefs
+    └─ SessionEnd detection
+
+daemon.py (18 MCP tools)
+    ├─ Memory/skill/graph CRUD
+    ├─ Self-evolution (hermes_fusion)
+    ├─ Warning search (search_warnings)
+    └─ Feedback tracking (record_feedback)
+```
+
+## Installation
+
+### 1. Clone
+
+```bash
+git clone https://github.com/xuanlinAI/overmind.git
+cd overmind
+```
+
+### 2. Dependencies
+
+```bash
+pip install jieba
+npm install
+```
+
+### 3. API Key
+
+```bash
+export DEEPSEEK_API_KEY=sk-xxx
+# Or replace YOUR_DEEPSEEK_API_KEY in source files
+```
+
+### 4. Register Plugin
+
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "ctxproxy": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["/path/to/overmind/daemon.py"],
+      "env": {}
+    }
+  }
+}
+```
+
+Also add the same to `~/.claude/.claude.json`.
+
+### 5. Register Hooks
+
+Add to `~/.claude/settings.json` under `hooks`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "node \"/path/to/overmind/inject.js\""}]}],
+    "UserPromptSubmit": [{"matcher": "", "hooks": [{"type": "command", "command": "node \"/path/to/overmind/inject.js\""}]}],
+    "SessionEnd": [{"matcher": "", "hooks": [{"type": "command", "command": "node \"/path/to/overmind/consolidate.js\""}]}]
+  }
+}
+```
+
+### 6. Configure CLAUDE.md
+
+Strip all routing rules and skill mappings. Keep only:
+
+```markdown
+All long-term memory and skills managed by Overmind.
+Install to your install path. Respond in Chinese.
+When injection.md recommends a skill, use the Skill tool — do not skip.
+Confirm before: install/uninstall packages, system config changes, file deletion, force git operations.
+
+!include /path/to/overmind/injection.md
+```
+
+### 7. Restart Claude Code
+
+## Maximizing Effectiveness
+
+### Skill File Migration
+
+CC auto-loads all SKILL.md descriptions from `~/.claude/skills/` every turn. Move them to Overmind:
+
+```bash
+cp ~/.claude/skills/*/SKILL.md overmind/skills/all/
+mv ~/.claude/skills ~/.claude/skills_bak
+```
+
+Overmind now recommends the 2-3 most relevant skills on demand instead of loading all 100+ descriptions every turn.
+
+### Model Switching
+
+Default: DeepSeek (best cost/performance). To switch:
+
+```javascript
+// OpenAI
+hostname: 'api.openai.com', path: '/v1/chat/completions', model: 'gpt-4o',
+
+// Anthropic
+hostname: 'api.anthropic.com', path: '/v1/messages', model: 'claude-sonnet-4-20250514',
+```
+
+Any OpenAI-compatible API works — Ollama, vLLM, LocalAI, etc.
+
+### Seeding Skill Preferences
+
+If the worker hasn't accumulated enough data yet:
+
+```bash
+node -e "
+const i = require('./index'); i.init();
+i.upsertSkillPref('your-skill', 'task category', 0.9);
+i.syncSkillPrefsToFile();
+"
+```
+
+## 18 MCP Tools
+
+| Tool | Purpose |
+|------|---------|
+| `search_memory` | Full-text search with optional AI semantic ranking |
+| `save_memory` | Manually save semantic memory |
+| `list_skills` | Keyword-search skill catalog |
+| `create_skill` | Create new SKILL.md |
+| `memory_stats` | Memory database statistics |
+| `current_context` | View current injection context |
+| `hermes_fusion` | Manual self-evolution trigger |
+| `search_procedural` | Search procedural templates |
+| `search_episodes` | Search session history |
+| `save_episodic` | Save session record |
+| `search_graph` | Graph search, returns subgraph |
+| `expand_keys` | Expand memory keys through graph |
+| `create_edge` | Manually create graph edge |
+| `graph_stats` | Graph statistics |
+| `search_warnings` | Detect danger signals for current task |
+| `record_feedback` | Record memory effectiveness feedback |
+| `skill_rankings` | Skill effectiveness leaderboard |
+| `skill_prefs` | Query skill usage preferences |
+
+## FAQ
+
+**Does it slow down CC startup?**
+No. Phase 0-1 run instantly (0 API calls). AI selection runs async in background.
+
+**Where is data stored?**
+Fully local — memory.db + graph.db + memory/ directory. Nothing uploaded.
+
+**How is privacy protected?**
+Dual-layer: HERMES_PROMPT instructs AI not to extract PII, code-level regex blocks phone/address/key patterns.
+
+**Can I use other AI models?**
+Yes — any OpenAI-compatible API. Model-agnostic by design.
+
+**How do I backup?**
+Copy `memory.db`, `graph.db`, and `memory/` directory.
+
+---
+
+<p align="center">
+  Made by <a href="https://github.com/xuanlinAI">玄霖AI (xuanlinAI)</a>
+</p>
