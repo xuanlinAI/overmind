@@ -61,6 +61,14 @@ v3 开发完成（30 模块，私有库存档），但我们选择跳过公开�
 
 [完整基准数据 → benchmarks/](benchmarks/) | [外部复现指南 → REPRODUCE.md](REPRODUCE.md)
 
+## 安装
+
+```bash
+git clone https://github.com/xuanlinAI/overmind.git && cd overmind && node install.js
+```
+
+一条命令搞定：安装依赖 → 初始化数据库 → 注册 MCP + Hooks → 更新 CLAUDE.md → 启动 Worker。设置 LLM API key 后重启 CC 生效。
+
 ## 核心能力 (66 模块)
 
 ### 记忆系统
@@ -207,6 +215,14 @@ v4 breakthrough: 66 modules connected via 15 event flows + parallel broadcast bu
 | Benchmarks | 39/39 PASSED |
 
 60 of 66 modules are sub-millisecond p50. Full reproducibility guide: [REPRODUCE.md](REPRODUCE.md)
+
+## Installation
+
+```bash
+git clone https://github.com/xuanlinAI/overmind.git && cd overmind && node install.js
+```
+
+One command: installs dependencies → initializes databases → registers MCP + Hooks → updates CLAUDE.md → starts Worker. Set your LLM API key, restart CC.
 
 ## Core Capabilities
 
