@@ -1,0 +1,41 @@
+{
+  "module": "orchestrator",
+  "class": "E_COMM",
+  "tiers": {
+    "T1": {
+      "iterations": 10,
+      "errors": 0,
+      "avg_ms": 0.0012800000000000003,
+      "min_ms": 0.001,
+      "max_ms": 0.0026,
+      "p95_ms": 0.0026,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T2": {
+      "iterations": 100,
+      "errors": 0,
+      "avg_ms": 0.0011060000000000006,
+      "min_ms": 0.001,
+      "max_ms": 0.0023,
+      "p95_ms": 0.0012,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T3": {
+      "iterations": 1000,
+      "errors": 0,
+      "avg_ms": 0.0011137999999999992,
+      "min_ms": 0.001,
+      "max_ms": 0.0115,
+      "p95_ms": 0.0011,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T4": {
+      "n_break": 120000,
+      "failure_mode": "timeout_30s"
+    }
+  },
+  "breaking_point": 120000
+}

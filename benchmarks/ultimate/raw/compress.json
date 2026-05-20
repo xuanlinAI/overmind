@@ -1,0 +1,41 @@
+{
+  "module": "compress",
+  "class": "A_MEMORY",
+  "tiers": {
+    "T1": {
+      "iterations": 10,
+      "errors": 0,
+      "avg_ms": 0.005239999999999999,
+      "min_ms": 0.0011,
+      "max_ms": 0.0417,
+      "p95_ms": 0.0417,
+      "mem_delta_kb": 28,
+      "error_rate": "0.0%"
+    },
+    "T2": {
+      "iterations": 100,
+      "errors": 0,
+      "avg_ms": 0.0011220000000000008,
+      "min_ms": 0.001,
+      "max_ms": 0.003,
+      "p95_ms": 0.0012,
+      "mem_delta_kb": 20,
+      "error_rate": "0.0%"
+    },
+    "T3": {
+      "iterations": 1000,
+      "errors": 0,
+      "avg_ms": 0.0012546000000000033,
+      "min_ms": 0.001,
+      "max_ms": 0.1108,
+      "p95_ms": 0.0012,
+      "mem_delta_kb": 112,
+      "error_rate": "0.0%"
+    },
+    "T4": {
+      "n_break": 120000,
+      "failure_mode": "timeout_30s"
+    }
+  },
+  "breaking_point": 120000
+}

@@ -1,0 +1,54 @@
+{
+  "suite": "evolution_longitudinal",
+  "trials": 10,
+  "tasks": 30,
+  "learning_curve": [
+    {
+      "trial": 1,
+      "accuracy": 0
+    },
+    {
+      "trial": 2,
+      "accuracy": 1
+    },
+    {
+      "trial": 3,
+      "accuracy": 1
+    },
+    {
+      "trial": 4,
+      "accuracy": 1
+    },
+    {
+      "trial": 5,
+      "accuracy": 1
+    },
+    {
+      "trial": 6,
+      "accuracy": 1
+    },
+    {
+      "trial": 7,
+      "accuracy": 1
+    },
+    {
+      "trial": 8,
+      "accuracy": 1
+    },
+    {
+      "trial": 9,
+      "accuracy": 1
+    },
+    {
+      "trial": 10,
+      "accuracy": 1
+    }
+  ],
+  "uplift": "+100.0pp",
+  "slope": "0.0545",
+  "r2": "0.273",
+  "headline": {
+    "uplift": "100.0pp",
+    "verdict": "PASS"
+  }
+}

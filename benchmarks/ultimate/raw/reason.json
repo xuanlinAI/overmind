@@ -1,0 +1,41 @@
+{
+  "module": "reason",
+  "class": "B_REASONING",
+  "tiers": {
+    "T1": {
+      "iterations": 10,
+      "errors": 0,
+      "avg_ms": 0.0012200000000000002,
+      "min_ms": 0.001,
+      "max_ms": 0.0029,
+      "p95_ms": 0.0029,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T2": {
+      "iterations": 100,
+      "errors": 0,
+      "avg_ms": 0.0011230000000000003,
+      "min_ms": 0.0009,
+      "max_ms": 0.0134,
+      "p95_ms": 0.001,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T3": {
+      "iterations": 1000,
+      "errors": 0,
+      "avg_ms": 0.001082699999999994,
+      "min_ms": 0.0009,
+      "max_ms": 0.0894,
+      "p95_ms": 0.001,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T4": {
+      "n_break": 120000,
+      "failure_mode": "timeout_30s"
+    }
+  },
+  "breaking_point": 120000
+}

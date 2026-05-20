@@ -1,0 +1,41 @@
+{
+  "module": "pool",
+  "class": "A_MEMORY",
+  "tiers": {
+    "T1": {
+      "iterations": 10,
+      "errors": 0,
+      "avg_ms": 0.006059999999999999,
+      "min_ms": 0.0027,
+      "max_ms": 0.0271,
+      "p95_ms": 0.0271,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T2": {
+      "iterations": 100,
+      "errors": 0,
+      "avg_ms": 0.0031279999999999984,
+      "min_ms": 0.0026,
+      "max_ms": 0.0153,
+      "p95_ms": 0.0044,
+      "mem_delta_kb": 36,
+      "error_rate": "0.0%"
+    },
+    "T3": {
+      "iterations": 1000,
+      "errors": 0,
+      "avg_ms": 0.002295200000000017,
+      "min_ms": 0.0015,
+      "max_ms": 0.161,
+      "p95_ms": 0.0027,
+      "mem_delta_kb": 104,
+      "error_rate": "0.0%"
+    },
+    "T4": {
+      "n_break": 120000,
+      "failure_mode": "timeout_30s"
+    }
+  },
+  "breaking_point": 120000
+}

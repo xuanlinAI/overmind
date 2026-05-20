@@ -1,0 +1,35 @@
+{
+  "suite": "adversarial_degradation_decomp",
+  "tests": {
+    "kg_poison": {
+      "real_edge_ok": true,
+      "low_confidence_not_flagged": true,
+      "verdict": "PASS"
+    },
+    "event_flood": {
+      "order_survived": true,
+      "verdict": "PASS"
+    },
+    "graceful_degradation": {
+      "modules_checked": 7,
+      "modules_loaded": 7,
+      "verdict": "PASS"
+    },
+    "evolution_decomp": {
+      "train_slope": "0.0350",
+      "heldout_slope": "0.0200",
+      "generalization_ratio": "0.57",
+      "verdict": "PASS"
+    },
+    "soak_integrity": {
+      "wrote": 500,
+      "actual_new": 500,
+      "integrity_ok": true,
+      "verdict": "PASS"
+    }
+  },
+  "headline": {
+    "passed": "5/5",
+    "verdict": "PASS"
+  }
+}

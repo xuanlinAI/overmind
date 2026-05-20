@@ -1,0 +1,23 @@
+{
+  "suite": "memory_supremacy",
+  "config": {
+    "mems": 500,
+    "queries": 50,
+    "edges": 200
+  },
+  "fts5": {
+    "recall": "0.0%",
+    "latency_ms": "0.02",
+    "p95_ms": "0.00"
+  },
+  "keyword_ranking": {
+    "recall": "90.0%",
+    "latency_ms": "0.10",
+    "p95_ms": "1.00"
+  },
+  "headline": {
+    "recall_500": "90.0%",
+    "write_throughput": "250000 ops/sec",
+    "verdict": "PASS"
+  }
+}

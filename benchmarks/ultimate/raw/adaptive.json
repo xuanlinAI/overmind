@@ -1,0 +1,41 @@
+{
+  "module": "adaptive",
+  "class": "G_COORD",
+  "tiers": {
+    "T1": {
+      "iterations": 10,
+      "errors": 0,
+      "avg_ms": 0.0013300000000000002,
+      "min_ms": 0.001,
+      "max_ms": 0.0034,
+      "p95_ms": 0.0034,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T2": {
+      "iterations": 100,
+      "errors": 0,
+      "avg_ms": 0.0010760000000000008,
+      "min_ms": 0.0009,
+      "max_ms": 0.0038,
+      "p95_ms": 0.0012,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T3": {
+      "iterations": 1000,
+      "errors": 0,
+      "avg_ms": 0.0010425999999999953,
+      "min_ms": 0.0009,
+      "max_ms": 0.0137,
+      "p95_ms": 0.0011,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T4": {
+      "n_break": 120000,
+      "failure_mode": "timeout_30s"
+    }
+  },
+  "breaking_point": 120000
+}

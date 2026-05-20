@@ -1,0 +1,63 @@
+{
+  "suite": "semantic_fidelity",
+  "full_chars": 4950,
+  "compressed_chars": 947,
+  "char_ratio": "19.1%",
+  "marker_union": 37,
+  "marker_intersection": 9,
+  "fidelity": "24.3%",
+  "lost_markers": [
+    "number:62",
+    "number:13",
+    "number:44",
+    "number:18",
+    "number:11",
+    "number:200",
+    "number:00",
+    "number:74",
+    "number:25",
+    "number:50"
+  ],
+  "categories": {
+    "API端点": {
+      "full": 0,
+      "compressed": 0,
+      "retained": 0,
+      "retention": "N/A"
+    },
+    "版本号": {
+      "full": 0,
+      "compressed": 0,
+      "retained": 0,
+      "retention": "N/A"
+    },
+    "文件路径": {
+      "full": 1,
+      "compressed": 1,
+      "retained": 1,
+      "retention": "100%"
+    },
+    "关键数字": {
+      "full": 27,
+      "compressed": 8,
+      "retained": 8,
+      "retention": "30%"
+    },
+    "技能名": {
+      "full": 7,
+      "compressed": 0,
+      "retained": 0,
+      "retention": "0%"
+    },
+    "错误码": {
+      "full": 2,
+      "compressed": 0,
+      "retained": 0,
+      "retention": "0%"
+    }
+  },
+  "headline": {
+    "fidelity": "24.3%",
+    "verdict": "FAIL"
+  }
+}

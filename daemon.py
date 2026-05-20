@@ -347,13 +347,13 @@ def search_hybrid(query, limit=10):
 
 def call_ai_api(messages, max_tokens=16384, timeout=120):
     import urllib.request
-    API_KEY = os.environ.get('DEEPSEEK_API_KEY') or os.environ.get('ANTHROPIC_AUTH_TOKEN') or 'YOUR_DEEPSEEK_API_KEY'
+    API_KEY = os.environ.get('DEEPSEEK_API_KEY') or os.environ.get('ANTHROPIC_AUTH_TOKEN') or 'YOUR_LLM_API_KEY'
     body = json.dumps({
         'model': 'deepseek-v4-flash',
         'max_tokens': max_tokens,
         'messages': messages
     }).encode('utf-8')
-    req = urllib.request.Request('https://api.deepseek.com/v1/chat/completions',
+    req = urllib.request.Request('https://your-llm-api.com/v1/chat/completions',
         data=body,
         headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {API_KEY}'})
     resp = urllib.request.urlopen(req, timeout=timeout)
@@ -688,7 +688,7 @@ def auto_promote():
 def analyze_skills_with_pro():
     """Offline: pro reads all SKILL.md files, generates matching_tags for each"""
     import urllib.request
-    API_KEY = os.environ.get('DEEPSEEK_API_KEY') or os.environ.get('ANTHROPIC_AUTH_TOKEN') or 'YOUR_DEEPSEEK_API_KEY'
+    API_KEY = os.environ.get('DEEPSEEK_API_KEY') or os.environ.get('ANTHROPIC_AUTH_TOKEN') or 'YOUR_LLM_API_KEY'
 
     # Add matching_tags column if needed
     try: db.execute('ALTER TABLE skill_index ADD COLUMN matching_tags TEXT DEFAULT \"\"')
@@ -725,7 +725,7 @@ Skills:
             'max_tokens': 16384,
             'messages': [{'role': 'user', 'content': prompt}]
         }).encode('utf-8')
-        req = urllib.request.Request('https://api.deepseek.com/anthropic/v1/messages',
+        req = urllib.request.Request('https://your-llm-api.com/anthropic/v1/messages',
             data=body,
             headers={'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01'})
         resp = urllib.request.urlopen(req, timeout=300)
@@ -757,7 +757,7 @@ Skills:
 def evolve_with_ai():
     """AI-driven evolution: merge similar, detect contradictions, create structured workflows"""
     import urllib.request
-    API_KEY = os.environ.get('DEEPSEEK_API_KEY') or os.environ.get('ANTHROPIC_AUTH_TOKEN') or 'YOUR_DEEPSEEK_API_KEY'
+    API_KEY = os.environ.get('DEEPSEEK_API_KEY') or os.environ.get('ANTHROPIC_AUTH_TOKEN') or 'YOUR_LLM_API_KEY'
 
     # Get top 30 high-value memories for AI analysis
     rows = db.execute("""SELECT key, content, tags, COALESCE(confidence,0.5) as conf, access_count
@@ -787,7 +787,7 @@ def evolve_with_ai():
             'max_tokens': 16384,
             'messages': [{'role': 'user', 'content': prompt}]
         }).encode('utf-8')
-        req = urllib.request.Request('https://api.deepseek.com/anthropic/v1/messages',
+        req = urllib.request.Request('https://your-llm-api.com/anthropic/v1/messages',
             data=body,
             headers={'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01'})
         resp = urllib.request.urlopen(req, timeout=300)

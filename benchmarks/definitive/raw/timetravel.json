@@ -1,0 +1,42 @@
+{
+  "module": "timetravel",
+  "tier": 2,
+  "repeats": [
+    {
+      "n": 0,
+      "errors": 1000,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "avg": 0,
+      "min": 0,
+      "max": 0,
+      "throughput": 0,
+      "mem_delta_kb": 0
+    },
+    {
+      "n": 0,
+      "errors": 1000,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "avg": 0,
+      "min": 0,
+      "max": 0,
+      "throughput": 0,
+      "mem_delta_kb": 0
+    },
+    {
+      "n": 0,
+      "errors": 1000,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "avg": 0,
+      "min": 0,
+      "max": 0,
+      "throughput": 0,
+      "mem_delta_kb": 0
+    }
+  ]
+}

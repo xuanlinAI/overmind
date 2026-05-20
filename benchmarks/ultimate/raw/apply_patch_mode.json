@@ -1,0 +1,41 @@
+{
+  "module": "apply_patch_mode",
+  "class": "A_MEMORY",
+  "tiers": {
+    "T1": {
+      "iterations": 10,
+      "errors": 0,
+      "avg_ms": 0.0013900000000000002,
+      "min_ms": 0.0011,
+      "max_ms": 0.0025,
+      "p95_ms": 0.0025,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T2": {
+      "iterations": 100,
+      "errors": 0,
+      "avg_ms": 0.0012910000000000013,
+      "min_ms": 0.0011,
+      "max_ms": 0.0138,
+      "p95_ms": 0.0012,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T3": {
+      "iterations": 1000,
+      "errors": 0,
+      "avg_ms": 0.0012857000000000163,
+      "min_ms": 0.0011,
+      "max_ms": 0.0978,
+      "p95_ms": 0.0012,
+      "mem_delta_kb": 96,
+      "error_rate": "0.0%"
+    },
+    "T4": {
+      "n_break": 120000,
+      "failure_mode": "timeout_30s"
+    }
+  },
+  "breaking_point": 120000
+}

@@ -1,0 +1,41 @@
+{
+  "module": "fleet",
+  "class": "E_COMM",
+  "tiers": {
+    "T1": {
+      "iterations": 10,
+      "errors": 0,
+      "avg_ms": 0.0013500000000000005,
+      "min_ms": 0.001,
+      "max_ms": 0.0036,
+      "p95_ms": 0.0036,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T2": {
+      "iterations": 100,
+      "errors": 0,
+      "avg_ms": 0.001090000000000001,
+      "min_ms": 0.001,
+      "max_ms": 0.0026,
+      "p95_ms": 0.0019,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T3": {
+      "iterations": 1000,
+      "errors": 0,
+      "avg_ms": 0.0010994999999999905,
+      "min_ms": 0.0009,
+      "max_ms": 0.041,
+      "p95_ms": 0.0011,
+      "mem_delta_kb": 56,
+      "error_rate": "0.0%"
+    },
+    "T4": {
+      "n_break": 120000,
+      "failure_mode": "timeout_30s"
+    }
+  },
+  "breaking_point": 120000
+}

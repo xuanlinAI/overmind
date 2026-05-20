@@ -1,0 +1,31 @@
+{
+  "suite": "causal_reasoning",
+  "hops": {
+    "2hop": {
+      "accuracy": "100.0%",
+      "avg_ms": "0.10",
+      "p95_ms": "1.00"
+    },
+    "3hop": {
+      "accuracy": "100.0%",
+      "avg_ms": "0.45",
+      "p95_ms": "1.00"
+    },
+    "5hop": {
+      "accuracy": "100.0%",
+      "avg_ms": "2.95",
+      "p95_ms": "4.00"
+    }
+  },
+  "degradation_curve": {
+    "slope": "0.000",
+    "r2": "0.000",
+    "interpretation": "flat — KG scales well"
+  },
+  "headline": {
+    "max_hops_tested": 5,
+    "accuracy_at_max_hops": "100.0%",
+    "degradation_slope": "0.000",
+    "verdict": "PASS"
+  }
+}

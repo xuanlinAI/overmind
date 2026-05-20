@@ -1,0 +1,41 @@
+{
+  "module": "nexus",
+  "class": "D_PLANNING",
+  "tiers": {
+    "T1": {
+      "iterations": 10,
+      "errors": 0,
+      "avg_ms": 0.0012099999999999997,
+      "min_ms": 0.0009,
+      "max_ms": 0.0028,
+      "p95_ms": 0.0028,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T2": {
+      "iterations": 100,
+      "errors": 0,
+      "avg_ms": 0.0010160000000000004,
+      "min_ms": 0.0009,
+      "max_ms": 0.0026,
+      "p95_ms": 0.0011,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T3": {
+      "iterations": 1000,
+      "errors": 0,
+      "avg_ms": 0.0011291999999999902,
+      "min_ms": 0.0009,
+      "max_ms": 0.1055,
+      "p95_ms": 0.0011,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T4": {
+      "n_break": 120000,
+      "failure_mode": "timeout_30s"
+    }
+  },
+  "breaking_point": 120000
+}

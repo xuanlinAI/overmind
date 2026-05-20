@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>玄霖超脑 · 无量网络 v4</title>
+<style>*{margin:0;padding:0;overflow:hidden}canvas{background:#0a0a0f}</style>
+</head><body>
+<canvas id="c"></canvas>
+<script>
+const c=document.getElementById('c'),x=c.getContext('2d');
+c.width=1080;c.height=1920;
+const W=1080,H=1920,totalFrames=1200,shootDuration=600;
+let frame=0,shoot=0;
+
+function ease(t){return t<.5?2*t*t:-1+(4-2*t)*t}
+function lerp(a,b,t){return a+(b-a)*t}
+function fade(t,inStart,inEnd,outStart,outEnd){
+  if(t<inStart||t>outEnd)return 0;
+  if(t<inEnd)return (t-inStart)/(inEnd-inStart);
+  if(t>outStart)return 1-(t-outStart)/(outEnd-outStart);
+  return 1;
+}
+
+function drawShot1(){ // Title reveal — polished glass
+  x.fillStyle='#0a0a0f';x.fillRect(0,0,W,H);
+  const t=shoot/200,a=ease(Math.min(1,t));
+  x.globalAlpha=a;
+  x.fillStyle='#ffffff';x.font='56px "PingFang SC","Microsoft YaHei",sans-serif';
+  x.textAlign='center';
+  const y=H*.35+Math.sin(shoot*.03)*8;
+  x.fillText('玄霖超脑 · 无量网络 v4',W/2,y);
+  x.font='28px "PingFang SC","Microsoft YaHei",sans-serif';
+  x.fillStyle='#4a9eff';
+  x.fillText('XUANLIN OVERMIND V4',W/2,y+70);
+  // Glass reflection
+  x.fillStyle='rgba(255,255,255,.05)';
+  x.fillRect(W*.1,y+90,W*.8,3);
+  x.globalAlpha=1;
+  shoot++;
+}
+
+function drawShot2(){ // AMNESIA crack
+  x.fillStyle='#0a0a0f';x.fillRect(0,0,W,H);
+  const t=fade(shoot,0,50,200,250);
+  if(t===0&&shoot>250)return shoot=0,void 0;
+  x.globalAlpha=t;
+  x.fillStyle='#4a9eff';x.font='24px monospace';x.textAlign='center';
+  const cy=H*.4;
+  x.fillText('> claude --resume',W/2,cy-30);
+  x.fillText('Memory: [           ] 0%',W/2,cy+10);
+  x.fillText('Context wiped.',W/2,cy+60);
+  // Crack lines
+  x.strokeStyle='rgba(255,100,100,.6)';
+  x.lineWidth=2;
+  for(let i=0;i<4;i++){
+    x.beginPath();const cx=W/2-200+Math.random()*400;
+    x.moveTo(cx,cy-80);x.lineTo(cx+Math.random()*100-50,cy+100);
+    x.stroke();
+  }
+  x.globalAlpha=1;
+  shoot++;
+}
+
+function drawShot3(){ // Brain awakening
+  x.fillStyle='#0a0a0f';x.fillRect(0,0,W,H);
+  const t=fade(shoot,0,50,350,400);
+  if(t===0&&shoot>400)return shoot=0,void 0;
+  const cx=W/2,cy=H/2;
+  // Draw 66 orbiting nodes
+  for(let i=0;i<66;i++){
+    const angle=(i/66)*Math.PI*2+shoot*.003;
+    const radius=200+Math.sin(i*1.7+shoot*.02)*80;
+    const nx=cx+Math.cos(angle)*radius,ny=cy+Math.sin(angle)*radius*.7;
+    const lit=i<shoot*.15; // Wake up one by one
+    x.beginPath();x.arc(nx,ny,lit?4:2,0,Math.PI*2);
+    x.fillStyle=lit?`rgba(74,158,255,${.3+t*.7})`:'rgba(74,158,255,.1)';
+    x.fill();
+    if(lit&&i>0&&i<shoot*.15){
+      const prevAngle=((i-1)/66)*Math.PI*2+shoot*.003;
+      const pr=cx+Math.cos(prevAngle)*radius,py=cy+Math.sin(prevAngle)*radius*.7;
+      x.strokeStyle=`rgba(74,158,255,${.15+t*.3})`;
+      x.lineWidth=.5;x.beginPath();x.moveTo(nx,ny);x.lineTo(pr,py);x.stroke();
+    }
+  }
+  x.fillStyle='#ffffff';x.font='18px monospace';x.textAlign='center';
+  x.globalAlpha=t;x.fillText('66 MODULES',cx,cy+340);
+  x.globalAlpha=1;
+  shoot++;
+}
+
+function drawShot4(){ // Five layers
+  x.fillStyle='#0a0a0f';x.fillRect(0,0,W,H);
+  const t=fade(shoot,0,50,250,300);
+  if(t===0&&shoot>300)return shoot=0,void 0;
+  const layers=['语义记忆','程序性','知识图谱','反馈闭环','主动预警'];
+  for(let i=0;i<5;i++){
+    const y=H*.25+i*120,bright=i<shoot*.04;
+    x.fillStyle=bright?`rgba(74,158,255,${.2+t*.6})`:'rgba(74,158,255,.05)';
+    x.fillRect(W*.2,y,W*.6,80);
+    x.fillStyle='#ffffff';x.font='24px "PingFang SC","Microsoft YaHei",sans-serif';
+    x.textAlign='center';x.globalAlpha=t;
+    x.fillText(layers[i],W/2,y+50);
+  }
+  x.globalAlpha=1;shoot++;
+}
+
+function drawShot5(){ // Red team
+  x.fillStyle='#0a0a0f';x.fillRect(0,0,W,H);
+  const t=fade(shoot,0,50,250,300);
+  if(t===0&&shoot>300)return shoot=0,void 0;
+  // Left: blue code
+  x.fillStyle='rgba(74,158,255,.1)';x.fillRect(W*.05,H*.2,W*.42,H*.5);
+  for(let i=0;i<6;i++){x.fillStyle='rgba(74,158,255,.3)';x.fillRect(W*.1,H*.28+i*40,W*.3,2)}
+  // Right: red twin
+  x.fillStyle='rgba(255,60,60,.1)';x.fillRect(W*.53,H*.2,W*.42,H*.5);
+  for(let i=0;i<6;i++){x.fillStyle='rgba(255,60,60,.3)';x.fillRect(W*.58,H*.28+i*40,W*.3,2)}
+  // Red X marks (appear at specific times)
+  if(shoot>150){x.strokeStyle='#ff3c3c';x.lineWidth=3;
+    x.beginPath();x.moveTo(W*.6,H*.3);x.lineTo(W*.8,H*.4);x.stroke();
+    x.beginPath();x.moveTo(W*.8,H*.3);x.lineTo(W*.6,H*.4);x.stroke();
+  }
+  if(shoot>200){x.strokeStyle='#ff3c3c';x.lineWidth=3;
+    x.beginPath();x.moveTo(W*.6,H*.45);x.lineTo(W*.75,H*.55);x.stroke();
+    x.beginPath();x.moveTo(W*.75,H*.45);x.lineTo(W*.6,H*.55);x.stroke();
+  }
+  // Arrow: red → blue
+  if(shoot>220){
+    x.strokeStyle='rgba(255,255,255,.5)';x.lineWidth=1;
+    x.beginPath();x.moveTo(W*.53,H*.45);x.lineTo(W*.47,H*.45);x.stroke();
+  }
+  x.fillStyle='#ffffff';x.font='18px "PingFang SC","Microsoft YaHei",sans-serif';
+  x.textAlign='center';x.globalAlpha=t;
+  x.fillText('👿 红队审查',W/2,H*.82);
+  x.globalAlpha=1;shoot++;
+}
+
+function drawShot6(){ // HUD speed
+  x.fillStyle='#0a0a0f';x.fillRect(0,0,W,H);
+  const t=fade(shoot,0,50,250,300);
+  if(t===0&&shoot>300)return shoot=0,void 0;
+  const metrics=[['566,000/s','OPS'],['99.96%','CACHE'],['$0.05/d','COST'],['66','MODULES']];
+  x.globalAlpha=t;x.textAlign='center';
+  for(let i=0;i<4;i++){
+    const y=H*.3+i*180,appear=i<shoot*.06;
+    x.font='48px monospace';x.fillStyle=appear?'#4a9eff':'rgba(74,158,255,.2)';
+    x.fillText(appear?metrics[i][0]:'---',W/2,y);
+    x.font='16px monospace';x.fillStyle='rgba(255,255,255,.5)';
+    x.fillText(metrics[i][1],W/2,y+40);
+  }
+  x.globalAlpha=1;shoot++;
+}
+
+function drawShot7(){ // Fleet
+  x.fillStyle='#0a0a0f';x.fillRect(0,0,W,H);
+  const t=fade(shoot,0,50,250,300);
+  if(t===0&&shoot>300)return shoot=0,void 0;
+  for(let i=0;i<3;i++){
+    const bx=W*.2+i*W*.3,by=H*.35;
+    // Panel
+    x.fillStyle=`rgba(74,158,255,${.08+t*.3})`;
+    x.fillRect(bx-120,by-80,240,300);
+    // Brain core
+    const pulse=.5+Math.sin(shoot*.05+i)*.5;
+    x.beginPath();x.arc(bx,by+60,20*pulse,0,Math.PI*2);
+    x.fillStyle=`rgba(74,158,255,${.3+t*.7})`;x.fill();
+    // Streams between
+    if(i<2){
+      x.strokeStyle=`rgba(74,158,255,${.15+t*.3})`;
+      x.lineWidth=1;x.beginPath();
+      x.moveTo(bx+130,by+60);x.lineTo(bx+W*.3-130,by+60);
+      x.stroke();
+    }
+  }
+  x.fillStyle='#ffffff';x.font='20px "PingFang SC","Microsoft YaHei",sans-serif';
+  x.textAlign='center';x.globalAlpha=t;x.fillText('舰队模式 · 共享大脑',W/2,H*.78);
+  x.globalAlpha=1;shoot++;
+}
+
+function drawShot8(){ // Final title
+  x.fillStyle='#0a0a0f';x.fillRect(0,0,W,H);
+  const a=ease(Math.min(1,shoot/150));
+  x.fillStyle='#ffffff';x.font='48px "PingFang SC","Microsoft YaHei",sans-serif';
+  x.textAlign='center';x.globalAlpha=a;
+  x.fillText('玄霖超脑 · 无量网络 v4',W/2,H*.42);
+  x.font='26px "PingFang SC","Microsoft YaHei",sans-serif';
+  x.fillStyle='#4a9eff';
+  x.fillText('Not memory. Reasoning.',W/2,H*.5);
+  x.globalAlpha=1;
+  // Heartbeat pulse
+  if(shoot>200){
+    const px=W*.35+(shoot-200)*3;
+    x.fillStyle='rgba(74,158,255,.8)';
+    x.fillRect(W*.15,H*.56,W*.7,1);
+    x.beginPath();x.arc(px,H*.56,2,0,Math.PI*2);x.fill();
+  }
+  shoot++;
+}
+
+const shots=[drawShot1,drawShot2,drawShot3,drawShot4,drawShot5,drawShot6,drawShot7,drawShot8];
+let currentShot=0;
+
+function animate(){
+  if(currentShot<shots.length){
+    shots[currentShot]();
+    if(frame++%600===0&&currentShot<shots.length-1)currentShot++;
+  }else if(currentShot===shots.length){
+    x.fillStyle='#0a0a0f';x.fillRect(0,0,W,H);
+  }
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body></html>

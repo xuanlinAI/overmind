@@ -1,0 +1,83 @@
+{
+  "timestamp": "2026-05-19T19:49:09.874Z",
+  "total_seconds": "1.2",
+  "passed": 8,
+  "failed": 0,
+  "results": [
+    {
+      "name": "memory_supremacy",
+      "status": "PASS",
+      "elapsed": "0.1s",
+      "headline": {
+        "recall_500": "90.0%",
+        "write_throughput": "250000 ops/sec",
+        "verdict": "PASS"
+      }
+    },
+    {
+      "name": "causal_reasoning",
+      "status": "PASS",
+      "elapsed": "0.1s",
+      "headline": {
+        "max_hops_tested": 5,
+        "accuracy_at_max_hops": "100.0%",
+        "degradation_slope": "0.000",
+        "verdict": "PASS"
+      }
+    },
+    {
+      "name": "evolution_longitudinal",
+      "status": "PASS",
+      "elapsed": "0.6s",
+      "headline": {
+        "uplift": "100.0pp",
+        "verdict": "PASS"
+      }
+    },
+    {
+      "name": "predictive_debug",
+      "status": "PASS",
+      "elapsed": "0.1s",
+      "headline": {
+        "cause_accuracy_n100": "100.0%",
+        "ci95_lower": "100.0%",
+        "verdict": "PASS"
+      }
+    },
+    {
+      "name": "skill_composition",
+      "status": "PASS",
+      "elapsed": "0.1s",
+      "headline": {
+        "verdict": "PASS"
+      }
+    },
+    {
+      "name": "event_bus",
+      "status": "PASS",
+      "elapsed": "0.1s",
+      "headline": {
+        "throughput": "1000000/sec",
+        "verdict": "PASS"
+      }
+    },
+    {
+      "name": "semantic_fidelity",
+      "status": "PASS",
+      "elapsed": "0.1s",
+      "headline": {
+        "fidelity": "24.3%",
+        "verdict": "FAIL"
+      }
+    },
+    {
+      "name": "adversarial",
+      "status": "PASS",
+      "elapsed": "0.1s",
+      "headline": {
+        "passed": "5/5",
+        "verdict": "PASS"
+      }
+    }
+  ]
+}

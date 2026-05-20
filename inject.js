@@ -7,6 +7,12 @@ const INJECTION_FILE = path.join(ROOT, 'injection.md')
 const LOCK_FILE = path.join(ROOT, '.injection.lock')
 
 function writeInjection(content) {
+  // Incremental: skip write if content unchanged
+  try {
+    const existing = fs.readFileSync(INJECTION_FILE, 'utf-8')
+    if (existing === content) return // no change, skip
+  } catch(e) {}
+
   const tmpFile = INJECTION_FILE + '.tmp'
   for (let retry = 0; retry < 10; retry++) {
     try {
@@ -26,8 +32,9 @@ function writeInjection(content) {
   }
 }
 const EPISODIC_DIR = path.join(ROOT, 'memory', 'episodic')
-const TRANSCRIPT_DIR = path.join(process.env.HOME || process.env.USERPROFILE, '.claude', 'projects', 'D--claude')
-const API_KEY = process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || 'YOUR_DEEPSEEK_API_KEY'
+const { detectTranscriptDir } = require(path.join(ROOT, 'util'))
+const TRANSCRIPT_DIR = detectTranscriptDir() || path.join(process.env.HOME || process.env.USERPROFILE, '.claude', 'projects', 'D--claude')
+const API_KEY = process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || 'YOUR_LLM_API_KEY'
 
 if (!fs.existsSync(EPISODIC_DIR)) fs.mkdirSync(EPISODIC_DIR, { recursive: true })
 
@@ -39,7 +46,7 @@ function callDeepSeek(messages) {
       messages: messages.map(m => ({ role: m.role, content: m.content }))
     })
     const req = https.request({
-      hostname: 'api.deepseek.com', path: '/anthropic/v1/messages', method: 'POST',
+      hostname: 'your-llm-api.com', path: '/anthropic/v1/messages', method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01' }
     }, res => {
       let data = ''
@@ -69,7 +76,7 @@ function callDeepSeekFlash(prompt) {
       messages: [{ role: 'user', content: prompt }]
     })
     const req = https.request({
-      hostname: 'api.deepseek.com', path: '/v1/chat/completions', method: 'POST',
+      hostname: 'your-llm-api.com', path: '/v1/chat/completions', method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
       timeout: 120000
     }, res => {
@@ -428,16 +435,19 @@ function getRecentContext() {
   } catch(e) { return '' }
 }
 
-function buildInjection(mems, skills, stats, projCtx, userTask, issueMems, taskPlan, skillStatus, warningText) {
-  const planText = taskPlan ? `\n## 执行计划\n${taskPlan}` : ''
-  const progressText = issueMems.length > 0
-    ? `\n## 未解决问题\n${issueMems.slice(0, 3).map(m => `- ${m.key}: ${m.content?.substring(0, 150)}`).join('\n')}`
+function buildInjection(ctx) {
+  const personaPart = ctx.personaText || ''
+  const compactionPart = ctx.compactionText || ''
+  const planText = ctx.taskPlan ? `\n## 执行计划\n${ctx.taskPlan}` : ''
+  const progressText = ctx.issueMems?.length > 0
+    ? `\n## 未解决问题\n${ctx.issueMems.slice(0, 3).map(m => `- ${m.key}: ${m.content?.substring(0, 150)}`).join('\n')}`
     : ''
 
-  const memText = mems.filter(m => !(m.key || '').startsWith('issue_')).slice(0, 5).map(m => `- ${m.key}: ${m.content?.substring(0, 200)}`).join('\n')
+  const memText = ctx.mems.filter(m => !(m.key || '').startsWith('issue_')).slice(0, 5).map(m => `- ${m.key}: ${m.content?.substring(0, 200)}`).join('\n')
 
-  const warningSection = warningText || ''
+  const warningSection = ctx.warningText || ''
 
+  const skills = ctx.skills || []
   const skillText = skills.slice(0, 3).map(s => {
     const core = getSkillCore(s)
     return `### ${s.name}\n${core || s.description?.substring(0, 200)}`
@@ -454,15 +464,17 @@ function buildInjection(mems, skills, stats, projCtx, userTask, issueMems, taskP
     ? `## 直接执行以下指令（已注入完整内容，无需查文件）\n\n${skillText}`
     : ''
 
-  const statusLine = skillStatus || (hasSkills ? `已注入 ${skills.length} 个技能` : '未注入技能')
+  const statusLine = ctx.skillStatus || (hasSkills ? `已注入 ${skills.length} 个技能` : '未注入技能')
 
   return `# Xuanlin Overmind
 
 ## 当前任务
-${userTask || '(未检测到)'}
+${ctx.userTask || '(未检测到)'}
 
 ## 项目上下文
-${projCtx}
+${ctx.projCtx}
+${personaPart}
+${compactionPart}
 ${continuityText}
 ${recentText}
 
@@ -481,7 +493,7 @@ ${memText || '- 暂无相关记忆'}
 ${statusLine}
 
 ## 状态
-语义${stats.semanticCount}条 技能${stats.skillCount}个 情景${stats.episodeCount}个
+语义${ctx.stats?.semanticCount || 0}条 技能${ctx.stats?.skillCount || 0}个 情景${ctx.stats?.episodeCount || 0}个
 
 > 遇到技术问题先用 MCP search_memory 查记忆，再回答。`
 }
@@ -525,7 +537,7 @@ async function main() {
 
   if (!workerAlive) {
     const { spawn } = require('child_process')
-    const worker = spawn('wscript.exe', [path.join(ROOT, 'launcher.vbs')], {
+    const worker = require(path.join(ROOT, 'platform')).spawnNode(path.join(ROOT, 'extract_worker.js'), [], {
       stdio: 'ignore',
       detached: true,
       windowsHide: true
@@ -537,7 +549,59 @@ async function main() {
   }
 
   const stats = index.getStats()
+
+  // ---- INTENT PREDICTION + PRELOAD ----
+  let prediction = null, preloadText = '', causalText = ''
+  try {
+    const intent = require(path.join(ROOT, 'intent'))
+    prediction = intent.predict(process.cwd())
+    if (prediction && prediction.confidence >= 0.4) {
+      try {
+        const preloader = require(path.join(ROOT, 'preload'))
+        const hints = preloader.preload(prediction, index, graph, intent)
+        if (hints && hints.preload) preloadText = preloader.formatPreload(hints)
+      } catch(e) {}
+    }
+  } catch(e) {}
+
   const userTask = getUserTask()
+  // ---- v4 EVENT BUS ----
+  require(path.join(ROOT, 'wiring')).init()
+  try {
+    const wiring = require(path.join(ROOT, 'wiring'))
+    const events = wiring.drainInterProcess(60000)
+    if (events.length > 0) {
+      fs.appendFileSync(logFile, `${new Date().toISOString()} v4: drained ${events.length} inter-process events\n`)
+    }
+  } catch(e) {}
+
+  // ---- BROADCAST: parallel fan-out ---
+  try {
+    require(path.join(ROOT, 'broadcast')).emit('inject:parallel', {
+      userTask, projCtx, stats, memKeys: keywordMems.map(m => m.key),
+      skills: skills.map(s => s.name), prediction
+    })
+  } catch(e) {}
+
+  // ---- MORNING BRIEF ----
+  let morningText = ''
+  try {
+    const morning = require(path.join(ROOT, 'morning'))
+    const brief = morning.generate()
+    if (brief && brief.away_minutes >= 30) morningText = morning.format(brief)
+    morning.touch()
+  } catch(e) {}
+
+  // ---- NEXUS: warmup + hot-reload ---
+  try {
+    const nexus = require(path.join(ROOT, 'nexus'))
+    nexus.scheduleWarmup(() => {
+      // Pre-warm stable modules for next injection
+      index.searchHybrid(userTask || projCtx, 5)
+    })
+    nexus.autoWatch()
+  } catch(e) {}
+
   const projCtx = projectContext()
   const searchQuery = userTask || projCtx
   const keywordMems = index.searchHybrid(searchQuery, 8)
@@ -569,9 +633,127 @@ async function main() {
     }
   } catch(e) {}
 
+  // ---- PERSONA ----
+  let personaText = ''
+  try {
+    const persona = require(path.join(ROOT, 'persona'))
+    const profile = persona.analyze(index)
+    if (profile && profile.traits && profile.traits.length > 0) {
+      personaText = persona.formatPersona(profile)
+    }
+  } catch(e) {}
+
+  // ---- ANTI-COMPACTION ----
+  let compactionText = ''
+  try {
+    const anticompact = require(path.join(ROOT, 'anticompact'))
+    const snap = anticompact.loadSnapshot()
+    if (snap) {
+      compactionText = anticompact.formatSnapshot(snap)
+      anticompact.clearSnapshot()
+    }
+  } catch(e) {}
+
+  // ---- ANOMALY ----
+  let anomalyText = ''
+  try {
+    const anomaly = require(path.join(ROOT, 'anomaly'))
+    const anom = anomaly.detect(index, userTask || '')
+    if (anom.length > 0) anomalyText = anomaly.formatAnomalies(anom)
+  } catch(e) {}
+
+  // ---- COST OPTIMIZER ----
+  let costText = ''
+  try {
+    const optimizer = require(path.join(ROOT, 'optimizer'))
+    const opt = optimizer.analyze()
+    if (opt && opt.estimates.total_tokens > 10000) {
+      costText = optimizer.formatReport(opt)
+    }
+  } catch(e) {}
+
+  // ---- TIME TRAVEL (only with specific query) ----
+  let timetravelText = ''
+  // ---- SKILL COMPOSER ----
+  let composerText = ''
+  try {
+    const composer = require(path.join(ROOT, 'composer'))
+    const chains = composer.detectChains(index)
+    if (chains && chains.chains.length > 0) {
+      composerText = composer.formatChains(chains)
+    }
+  } catch(e) {}
+
+  // ---- KNOWLEDGE VERIFIER ----
+  let verifierText = ''
+  try {
+    const verifier = require(path.join(ROOT, 'verifier'))
+    const vf = verifier.verify(index)
+    if (vf && vf.scanned > 0) {
+      verifierText = verifier.formatVerification(vf)
+    }
+  } catch(e) {}
+
+  // ---- PREFETCH ----
+  let prefetchText = ''
+  try {
+    const pfmod = require(path.join(ROOT, 'prefetch'))
+    const pf = pfmod.prefetch(process.cwd(), userTask || '')
+    if (pf && pf.hints.length > 0) {
+      prefetchText = pfmod.formatPrefetch(pf)
+    }
+  } catch(e) {}
+
+  // ---- AUTONOMOUS RESEARCH ----
+  let researchFindings = ''
+  try {
+    const rfFile = path.join(ROOT, '.research_findings.json')
+    if (fs.existsSync(rfFile)) {
+      const rfData = JSON.parse(fs.readFileSync(rfFile, 'utf-8'))
+      const research = require(path.join(ROOT, 'research'))
+      if (rfData && rfData.total_findings > 0) researchFindings = research.formatFindings(rfData)
+    }
+  } catch(e) {}
+
+  // ---- CROSS-PROJECT TRANSFER ----
+  let transferText = ''
+  try {
+    const transfer = require(path.join(ROOT, 'transfer'))
+    const transRows = transfer.getTransferable(userTask || projCtx, 5)
+    if (transRows.length > 0) transferText = transfer.formatTransferable(transRows)
+  } catch(e) {}
+
+  // ---- DREAM FINDINGS ----
+  let dreamText = ''
+  try {
+    const dream = require(path.join(ROOT, 'dream'))
+    const df = dream.loadDreamFindings()
+    if (df) dreamText = dream.formatDream(df)
+  } catch(e) {}
+
+  // ---- OUTPUT SHIELD ----
+  let shieldText = ''
+  try {
+    const shield = require(path.join(ROOT, 'shield'))
+    // Verify the injection content itself for contradictions
+    const verify = shield.verify((projCtx || '') + ' ' + (userTask || ''), index)
+    if (verify && verify.flags.length > 0) shieldText = shield.formatShield(verify)
+  } catch(e) {}
+
   // Phase 1: Write lite injection immediately — fast, zero API delay
   const liteMems = keywordMems.slice(0, 5)
-  const liteDoc = buildInjection(liteMems, [], stats, projCtx, userTask, issueMems, null, '⏳ AI 筛选中…', liteWarningText)
+  let liteDoc = buildInjection({ mems: liteMems, skills: [], stats, projCtx, userTask, issueMems, taskPlan: null, skillStatus: '⏳ AI 筛选中…', warningText: liteWarningText, personaText, compactionText })
+  // Inject post-build sections
+  if (preloadText) liteDoc = liteDoc.replace('## 相关记忆', preloadText + '\n## 相关记忆')
+  if (anomalyText) liteDoc = liteDoc.replace('## 相关记忆', anomalyText + '\n## 相关记忆')
+  if (costText) liteDoc = liteDoc.replace('## 相关记忆', costText + '\n## 相关记忆')
+  if (composerText) liteDoc = liteDoc.replace('## 相关记忆', composerText + '\n## 相关记忆')
+  if (verifierText) liteDoc = liteDoc.replace('## 相关记忆', verifierText + '\n## 相关记忆')
+  if (prefetchText) liteDoc = liteDoc.replace('## 相关记忆', prefetchText + '\n## 相关记忆')
+  if (dreamText) liteDoc = liteDoc.replace('## 相关记忆', dreamText + '\n## 相关记忆')
+  if (researchFindings) liteDoc = liteDoc.replace('## 相关记忆', researchFindings + '\n## 相关记忆')
+  if (transferText) liteDoc = liteDoc.replace('## 相关记忆', transferText + '\n## 相关记忆')
+  if (shieldText) liteDoc = liteDoc.replace('## 相关记忆', shieldText + '\n## 相关记忆')
   writeInjection(liteDoc)
   fs.appendFileSync(logFile, `${new Date().toISOString()} inject(lite): ${liteDoc.length} chars mem=${stats.semanticCount} worker=${workerSpawned ? 'spawned' : 'already_running'}\n`)
 
@@ -718,8 +900,17 @@ async function main() {
       warningText = graph.formatWarnings(warnings, 5)
       fs.appendFileSync(logFile, `${new Date().toISOString()} guard: ${warnings.length} warnings found | high=${warnings.filter(w=>w.severity==='high').length} medium=${warnings.filter(w=>w.severity==='medium').length}\n`)
     }
+
+    // ---- FORECAST ----
+    const forecast = require(path.join(ROOT, 'forecast'))
+    const fc = forecast.predict(graph, memKeys)
+    if (fc) {
+      const fcText = forecast.formatForecast(fc)
+      if (fcText) warningText = (warningText || '') + fcText
+      fs.appendFileSync(logFile, `${new Date().toISOString()} forecast: ${fc.predictions.length} predictions\n`)
+    }
   } catch(e) {
-    fs.appendFileSync(logFile, `${new Date().toISOString()} guard: warning detection failed: ${e.message}\n`)
+    fs.appendFileSync(logFile, `${new Date().toISOString()} guard/forecast: ${e.message}\n`)
   }
 
   // Phase 3: Rewrite with better skills/memories if AI returned any
@@ -733,9 +924,62 @@ async function main() {
     } else {
       skillStatus = '未匹配到合适技能'
     }
-    const fullDoc = buildInjection(mems, skills, stats, projCtx, userTask, issueMems, taskPlan, skillStatus, warningText)
-    writeInjection(fullDoc)
-    fs.appendFileSync(logFile, `${new Date().toISOString()} inject(full): ${fullDoc.length} chars skills=[${skills.map(s=>s.name).join(',')}] sel=${skillMethod} mems=${memMethod} status=${skillStatus}\n`)
+    let fullDoc = buildInjection({ mems, skills, stats, projCtx, userTask, issueMems, taskPlan, skillStatus, warningText, personaText, compactionText })
+    if (preloadText) fullDoc = fullDoc.replace('## 相关记忆', preloadText + '\n## 相关记忆')
+    if (causalText) fullDoc = fullDoc.replace('## 相关记忆', causalText + '\n## 相关记忆')
+    if (anomalyText) fullDoc = fullDoc.replace('## 相关记忆', anomalyText + '\n## 相关记忆')
+    if (costText) fullDoc = fullDoc.replace('## 相关记忆', costText + '\n## 相关记忆')
+    if (composerText) fullDoc = fullDoc.replace('## 相关记忆', composerText + '\n## 相关记忆')
+    if (verifierText) fullDoc = fullDoc.replace('## 相关记忆', verifierText + '\n## 相关记忆')
+    if (prefetchText) fullDoc = fullDoc.replace('## 相关记忆', prefetchText + '\n## 相关记忆')
+    if (dreamText) fullDoc = fullDoc.replace('## 相关记忆', dreamText + '\n## 相关记忆')
+    if (researchFindings) fullDoc = fullDoc.replace('## 相关记忆', researchFindings + '\n## 相关记忆')
+    if (transferText) fullDoc = fullDoc.replace('## 相关记忆', transferText + '\n## 相关记忆')
+
+    // ---- COMMUNICATOR: AI filter → slim injection ----
+    let finalDoc = fullDoc
+    try {
+      // Save full version as backup
+      const fullBackup = path.join(ROOT, '.full_injection.md')
+      fs.writeFileSync(fullBackup, fullDoc, 'utf-8')
+
+      // Pass through communicator AI
+      const communicator = require(path.join(ROOT, 'communicator'))
+      const isSessionStart = !fs.existsSync(path.join(ROOT, '.session_active'))
+      fs.writeFileSync(path.join(ROOT, '.session_active'), '1', 'utf-8')
+      const filtered = await communicator.filter(fullDoc, userTask, isSessionStart)
+      if (filtered && filtered.length > 100) {
+        finalDoc = filtered
+        fs.appendFileSync(logFile, `${new Date().toISOString()} communicator: ${fullDoc.length}C → ${filtered.length}C (${isSessionStart?'SessionStart':'UserPromptSubmit'})\n`)
+      }
+    } catch(e) {
+      fs.appendFileSync(logFile, `${new Date().toISOString()} communicator error: ${e.message}, using full doc\n`)
+    }
+
+    // Auto-trigger hermes_fusion every 50 injections (self-evolution)
+    try {
+      const FUSION_COUNT_FILE = path.join(ROOT, '.fusion_counter')
+      let count = 0
+      try { count = parseInt(fs.readFileSync(FUSION_COUNT_FILE, 'utf-8')) } catch(e) {}
+      count++
+      fs.writeFileSync(FUSION_COUNT_FILE, String(count))
+      if (count % 50 === 0) {
+        const { spawn } = require('child_process')
+        spawn('python', ['-c', 'import daemon,json; print(json.dumps(daemon.hermes_fusion()))'], { cwd: ROOT, stdio: 'ignore', detached: true }).unref()
+        fs.appendFileSync(logFile, `${new Date().toISOString()} hermes_fusion: triggered (${count} injections)\n`)
+      }
+    } catch(e) {}
+
+    writeInjection(finalDoc)
+    fs.appendFileSync(logFile, `${new Date().toISOString()} inject(full): ${finalDoc.length} chars skills=[${skills.map(s=>s.name).join(',')}] sel=${skillMethod} mems=${memMethod} status=${skillStatus}\n`)
+
+    // v4: emit events
+    try {
+      const bus = require(path.join(ROOT, 'eventbus'))
+      bus.emit('inject:complete', { mode: isSessionStart ? 'SessionStart' : 'UserPromptSubmit', chars: finalDoc.length, skills, mems })
+      bus.emit('communicator:filtered', { original: fullDoc.length, filtered: finalDoc.length, mode: isSessionStart ? 'SessionStart' : 'UserPromptSubmit' })
+      if (skills.length > 0) bus.emit('skill:injected', { skills: skills.map(s => s.name) })
+    } catch(e) {}
   } else {
     fs.appendFileSync(logFile, `${new Date().toISOString()} inject: no skills needed (lite kept) sel=${skillMethod} aiEmpty=${aiSaidEmpty} mems=${memMethod}\n`)
   }

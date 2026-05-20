@@ -1,0 +1,42 @@
+{
+  "module": "adaptive",
+  "tier": 1,
+  "repeats": [
+    {
+      "n": 0,
+      "errors": 10000,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "avg": 0,
+      "min": 0,
+      "max": 0,
+      "throughput": 0,
+      "mem_delta_kb": 4
+    },
+    {
+      "n": 0,
+      "errors": 10000,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "avg": 0,
+      "min": 0,
+      "max": 0,
+      "throughput": 0,
+      "mem_delta_kb": 16
+    },
+    {
+      "n": 0,
+      "errors": 10000,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "avg": 0,
+      "min": 0,
+      "max": 0,
+      "throughput": 0,
+      "mem_delta_kb": 0
+    }
+  ]
+}

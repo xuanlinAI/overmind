@@ -3,7 +3,7 @@ const path = require('path')
 const https = require('https')
 
 const ROOT = path.dirname(__filename)
-const API_KEY = process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || 'YOUR_DEEPSEEK_API_KEY'
+const API_KEY = process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || 'YOUR_LLM_API_KEY'
 
 function callAPI(messages) {
   return new Promise((resolve, reject) => {
@@ -13,7 +13,7 @@ function callAPI(messages) {
       messages: messages.map(m => ({ role: m.role, content: m.content }))
     })
     const req = https.request({
-      hostname: 'api.deepseek.com', path: '/anthropic/v1/messages', method: 'POST',
+      hostname: 'your-llm-api.com', path: '/anthropic/v1/messages', method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01' }
     }, res => {
       let data = ''
@@ -108,7 +108,7 @@ ${context.substring(0, 2000)}`
 
     if (injectedKeys.length > 0) {
       // Read current transcript to detect references
-      const transcriptDir = path.join(process.env.HOME || process.env.USERPROFILE, '.claude', 'projects', 'D--claude')
+      const transcriptDir = (require('./util').detectTranscriptDir() || path.join(process.env.HOME || process.env.USERPROFILE, '.claude', 'projects', 'D--claude'))
       let transcriptText = ''
       try {
         const files = fs.readdirSync(transcriptDir).filter(f => f.endsWith('.jsonl'))
@@ -131,6 +131,8 @@ ${context.substring(0, 2000)}`
         if (refKeys.has(key)) {
           index.recordFeedback(key, 'referenced', sessionId, 'found_in_transcript')
           index.recordFeedback(key, 'helped', sessionId, 'session_used_memory')
+          // v4: emit feedback event for real-time module response
+          try { require(path.join(ROOT, 'eventbus')).emit('feedback:recorded', { memoryKey: key, eventType: 'helped' }) } catch(e) {}
         }
       }
 
@@ -141,6 +143,36 @@ ${context.substring(0, 2000)}`
   } catch(e) {
     process.stdout.write(`[overmind] feedback analysis error: ${e.message}\n`)
   }
+
+  // ---- ANTI-COMPACTION: save snapshot ----
+  try {
+    const anticompact = require(path.join(ROOT, 'anticompact'))
+    const transcriptDir = (require('./util').detectTranscriptDir() || path.join(process.env.HOME || process.env.USERPROFILE, '.claude', 'projects', 'D--claude'))
+    const compaction = anticompact.detectCompaction(transcriptDir)
+    if (compaction && compaction.detected) {
+      anticompact.saveSnapshot(context, compaction)
+      process.stdout.write(`[overmind] compaction snapshot saved\n`)
+    }
+  } catch(e) {}
+
+  // ---- MEMORY BUDGET ----
+  try {
+    const budget = require(path.join(ROOT, 'budget'))
+    const result = budget.analyze(index)
+    if (result.archived > 0) {
+      process.stdout.write(`[overmind] budget: archived ${result.archived} low-value memories\n`)
+    }
+  } catch(e) {}
+
+  // ---- CONFLICT ARBITRATION ----
+  try {
+    const arb = require(path.join(ROOT, 'arbitrator'))
+    const graph = require(path.join(ROOT, 'graph'))
+    const result = arb.resolve(index, graph)
+    if (result.resolved > 0) {
+      process.stdout.write(`[overmind] arbitrator: ${result.summary}\n`)
+    }
+  } catch(e) {}
 
   // ---- SKILL FEEDBACK: Detect invocation + completion ----
   try {
@@ -155,7 +187,7 @@ ${context.substring(0, 2000)}`
 
     if (injectedSkills.length > 0) {
       // Read transcript for detection
-      const transcriptDir = path.join(process.env.HOME || process.env.USERPROFILE, '.claude', 'projects', 'D--claude')
+      const transcriptDir = (require('./util').detectTranscriptDir() || path.join(process.env.HOME || process.env.USERPROFILE, '.claude', 'projects', 'D--claude'))
       let transcriptText = ''
       try {
         const files = fs.readdirSync(transcriptDir).filter(f => f.endsWith('.jsonl'))
@@ -167,12 +199,17 @@ ${context.substring(0, 2000)}`
         }
       } catch(e) {}
 
-      // Signal 1: Detect Skill tool invocation
+      // Signal 1: Detect Skill tool invocation OR file-based skill read
       const invokedSkills = []
       for (const sn of injectedSkills) {
-        // Check if skill name appears near Skill tool call pattern
-        const pattern = new RegExp(`Skill\\(\\{[^}]*skill["']?\\s*:\\s*["']${sn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'i')
-        if (pattern.test(transcriptText)) {
+        // Method A: Skill tool call pattern
+        const toolPattern = new RegExp(`Skill\\(\\{[^}]*skill["']?\\s*:\\s*["']${sn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'i')
+        // Method B: File-based read (Read skill file from context-proxy)
+        const filePattern = new RegExp(`(Read|read|读取).*${sn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}|${sn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.md`, 'i')
+        // Method C: Skill name appears near "already read" or "loaded from"
+        const loadPattern = new RegExp(`(already read|loaded|read.*skill|skill.*from file).*${sn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i')
+
+        if (toolPattern.test(transcriptText) || filePattern.test(transcriptText) || loadPattern.test(transcriptText)) {
           invokedSkills.push(sn)
           index.recordSkillFeedback(sn, 'invoked', '', sessionId, 0.8)
         }
@@ -204,11 +241,12 @@ ${context.substring(0, 2000)}`
       }
 
       // Record not_used for injected skills that weren't invoked
-      for (const sn of injectedSkills) {
-        if (!invokedSkills.includes(sn)) {
-          index.recordSkillFeedback(sn, 'not_used', '', sessionId, 0.3)
-        }
-      }
+      // (Commented: user prefers no auto-downgrade to avoid false negatives)
+      // for (const sn of injectedSkills) {
+      //   if (!invokedSkills.includes(sn)) {
+      //     index.recordSkillFeedback(sn, 'not_used', '', sessionId, 0.3)
+      //   }
+      // }
 
       // Sync skill prefs to shared file
       index.syncSkillPrefsToFile()

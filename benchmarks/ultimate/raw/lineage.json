@@ -1,0 +1,41 @@
+{
+  "module": "lineage",
+  "class": "F_LEARNING",
+  "tiers": {
+    "T1": {
+      "iterations": 10,
+      "errors": 0,
+      "avg_ms": 0.0013100000000000004,
+      "min_ms": 0.001,
+      "max_ms": 0.0033,
+      "p95_ms": 0.0033,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T2": {
+      "iterations": 100,
+      "errors": 0,
+      "avg_ms": 0.0010870000000000005,
+      "min_ms": 0.0009,
+      "max_ms": 0.0023,
+      "p95_ms": 0.0017,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T3": {
+      "iterations": 1000,
+      "errors": 0,
+      "avg_ms": 0.0010381999999999967,
+      "min_ms": 0.0009,
+      "max_ms": 0.0154,
+      "p95_ms": 0.0011,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T4": {
+      "n_break": 120000,
+      "failure_mode": "timeout_30s"
+    }
+  },
+  "breaking_point": 120000
+}

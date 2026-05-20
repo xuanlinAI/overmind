@@ -1,0 +1,20 @@
+{
+  "suite": "skill_composition",
+  "chains": {
+    "2_skill_chain": {
+      "success": "100.0%"
+    },
+    "3_skill_chain": {
+      "success": "100.0%"
+    },
+    "4_skill_chain": {
+      "success": "100.0%"
+    },
+    "5_skill_chain": {
+      "success": "100.0%"
+    }
+  },
+  "headline": {
+    "verdict": "PASS"
+  }
+}

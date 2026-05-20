@@ -1,0 +1,12 @@
+{
+  "suite": "predictive_debug",
+  "samples": 100,
+  "cause_accuracy": "100.0%",
+  "hazard_detection": "99.0%",
+  "ci95": "100.0%–100.0%",
+  "headline": {
+    "cause_accuracy_n100": "100.0%",
+    "ci95_lower": "100.0%",
+    "verdict": "PASS"
+  }
+}

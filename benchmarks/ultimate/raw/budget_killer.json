@@ -1,0 +1,41 @@
+{
+  "module": "budget_killer",
+  "class": "G_COORD",
+  "tiers": {
+    "T1": {
+      "iterations": 10,
+      "errors": 0,
+      "avg_ms": 0.00127,
+      "min_ms": 0.0011,
+      "max_ms": 0.0025,
+      "p95_ms": 0.0025,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T2": {
+      "iterations": 100,
+      "errors": 0,
+      "avg_ms": 0.0013939999999999994,
+      "min_ms": 0.001,
+      "max_ms": 0.0274,
+      "p95_ms": 0.0015,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T3": {
+      "iterations": 1000,
+      "errors": 0,
+      "avg_ms": 0.001127200000000003,
+      "min_ms": 0.001,
+      "max_ms": 0.0115,
+      "p95_ms": 0.0012,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T4": {
+      "n_break": 120000,
+      "failure_mode": "timeout_30s"
+    }
+  },
+  "breaking_point": 120000
+}

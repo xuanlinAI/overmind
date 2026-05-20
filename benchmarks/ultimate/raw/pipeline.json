@@ -1,0 +1,41 @@
+{
+  "module": "pipeline",
+  "class": "D_PLANNING",
+  "tiers": {
+    "T1": {
+      "iterations": 10,
+      "errors": 0,
+      "avg_ms": 0.07332,
+      "min_ms": 0.0052,
+      "max_ms": 0.6141,
+      "p95_ms": 0.6141,
+      "mem_delta_kb": 8,
+      "error_rate": "0.0%"
+    },
+    "T2": {
+      "iterations": 100,
+      "errors": 0,
+      "avg_ms": 0.004421999999999998,
+      "min_ms": 0.0035,
+      "max_ms": 0.0189,
+      "p95_ms": 0.0087,
+      "mem_delta_kb": 40,
+      "error_rate": "0.0%"
+    },
+    "T3": {
+      "iterations": 1000,
+      "errors": 0,
+      "avg_ms": 0.0038995000000000167,
+      "min_ms": 0.0024,
+      "max_ms": 0.1055,
+      "p95_ms": 0.0067,
+      "mem_delta_kb": 1212,
+      "error_rate": "0.0%"
+    },
+    "T4": {
+      "n_break": 120000,
+      "failure_mode": "timeout_30s"
+    }
+  },
+  "breaking_point": 120000
+}

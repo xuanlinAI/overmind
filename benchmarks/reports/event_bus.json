@@ -1,0 +1,10 @@
+{
+  "suite": "event_bus",
+  "throughput": "1000000 events/sec (1ms for 1000)",
+  "ordering_correct": true,
+  "chaos_survivor_ok": false,
+  "headline": {
+    "throughput": "1000000/sec",
+    "verdict": "PASS"
+  }
+}

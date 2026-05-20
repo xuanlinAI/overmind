@@ -1,0 +1,41 @@
+{
+  "module": "clarify_threshold",
+  "class": "B_REASONING",
+  "tiers": {
+    "T1": {
+      "iterations": 10,
+      "errors": 0,
+      "avg_ms": 0.012790000000000001,
+      "min_ms": 0.0001,
+      "max_ms": 0.1237,
+      "p95_ms": 0.1237,
+      "mem_delta_kb": 16,
+      "error_rate": "0.0%"
+    },
+    "T2": {
+      "iterations": 100,
+      "errors": 0,
+      "avg_ms": 0.000092,
+      "min_ms": 0.0001,
+      "max_ms": 0.0005,
+      "p95_ms": 0,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T3": {
+      "iterations": 1000,
+      "errors": 0,
+      "avg_ms": 0.00011250000000000151,
+      "min_ms": 0.0001,
+      "max_ms": 0.024,
+      "p95_ms": 0,
+      "mem_delta_kb": 44,
+      "error_rate": "0.0%"
+    },
+    "T4": {
+      "n_break": 120000,
+      "failure_mode": "timeout_30s"
+    }
+  },
+  "breaking_point": 120000
+}

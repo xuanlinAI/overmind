@@ -1,0 +1,41 @@
+{
+  "module": "dream",
+  "class": "F_LEARNING",
+  "tiers": {
+    "T1": {
+      "iterations": 10,
+      "errors": 0,
+      "avg_ms": 0.0011900000000000005,
+      "min_ms": 0.001,
+      "max_ms": 0.0024,
+      "p95_ms": 0.0024,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T2": {
+      "iterations": 100,
+      "errors": 0,
+      "avg_ms": 0.0011360000000000005,
+      "min_ms": 0.0009,
+      "max_ms": 0.0137,
+      "p95_ms": 0.0011,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T3": {
+      "iterations": 1000,
+      "errors": 0,
+      "avg_ms": 0.001008300000000001,
+      "min_ms": 0.0009,
+      "max_ms": 0.0115,
+      "p95_ms": 0.001,
+      "mem_delta_kb": 0,
+      "error_rate": "0.0%"
+    },
+    "T4": {
+      "n_break": 120000,
+      "failure_mode": "timeout_30s"
+    }
+  },
+  "breaking_point": 120000
+}

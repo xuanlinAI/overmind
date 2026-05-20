@@ -13,6 +13,7 @@ const RELATION_TYPES = [
   'blocked_by',      // A is prevented by B
   'causes',          // A leads to B
   'solves',          // A resolves B
+  'mitigates',       // A reduces negative effect of B
   'related_to',      // general association
   'extends',         // A builds on B
   'conflicts_with',  // A contradicts B
@@ -20,7 +21,9 @@ const RELATION_TYPES = [
   'triggers'         // A activates B
 ]
 
+let _inited = false
 function init() {
+  if (_inited && db) return db
   db = new Database(GRAPH_DB)
   db.pragma('journal_mode = WAL')
 
@@ -55,6 +58,10 @@ function init() {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_edges_type ON edges(relation_type)`)
   db.exec(`CREATE INDEX IF NOT EXISTS idx_edges_src_tgt ON edges(source, target)`)
   try { db.exec('ALTER TABLE edges ADD COLUMN updated_at TEXT') } catch(e) {}
+  try { db.exec('ALTER TABLE edges ADD COLUMN exposure_count INTEGER DEFAULT 0') } catch(e) {}
+  try { db.exec('ALTER TABLE edges ADD COLUMN outcome_count INTEGER DEFAULT 0') } catch(e) {}
+  try { db.exec('ALTER TABLE edges ADD COLUMN failure_rate REAL DEFAULT 0') } catch(e) {}
+  try { db.exec('ALTER TABLE edges ADD COLUMN succeed_count INTEGER DEFAULT 0') } catch(e) {}
 
   // FTS for edge search
   try {
@@ -63,6 +70,7 @@ function init() {
 
   db.pragma('wal_autocheckpoint = 200')
 
+  _inited = true
   return db
 }
 
@@ -482,6 +490,65 @@ function formatWarnings(warnings, maxWarnings = 5) {
   return lines.join('\n')
 }
 
+// ---- CAUSAL ----
+
+function recordExposure(key) {
+  if (!db) init()
+  db.prepare(`UPDATE edges SET exposure_count = COALESCE(exposure_count, 0) + 1
+    WHERE (source = ? OR target = ?) AND relation_type IN ('causes','mitigates','blocked_by')`).run(key, key)
+}
+
+function recordOutcome(causeKey, effectKey, success) {
+  if (!db) init()
+  const edge = db.prepare(`SELECT id, exposure_count, outcome_count, succeed_count FROM edges
+    WHERE source = ? AND target = ? AND relation_type = 'causes'`).get(causeKey, effectKey)
+  if (!edge) return
+  const exp = (edge.exposure_count || 0) + 1
+  const out = (edge.outcome_count || 0) + 1
+  const succ = (edge.succeed_count || 0) + (success ? 1 : 0)
+  const fr = Math.round((1 - succ / Math.max(1, out)) * 100) / 100
+  db.prepare(`UPDATE edges SET outcome_count=?, succeed_count=?, exposure_count=?, failure_rate=?
+    WHERE id=?`).run(out, succ, exp, fr, edge.id)
+}
+
+function getCausalChain(key, maxDepth = 3) {
+  if (!db) init()
+  const chain = [], visited = new Set()
+  const queue = [[key, 0]]
+  while (queue.length > 0) {
+    const [current, depth] = queue.shift()
+    if (depth >= maxDepth || visited.has(current)) continue
+    visited.add(current)
+    const edges = db.prepare(`SELECT source, target, relation_type, confidence, evidence,
+      COALESCE(exposure_count,0) as ec, COALESCE(outcome_count,0) as oc,
+      COALESCE(failure_rate,0) as fr, COALESCE(succeed_count,0) as sc
+      FROM edges WHERE source = ? AND relation_type IN ('causes','mitigates','blocked_by','solves','depends_on')
+      ORDER BY confidence DESC LIMIT 10`).all(current)
+    for (const e of edges) {
+      if (visited.has(e.target) && e.target !== key) continue
+      chain.push({ from:e.source, to:e.target, relation:e.relation_type,
+        confidence:e.confidence, exposure:e.ec, outcomes:e.oc,
+        failure_rate:e.fr, success_count:e.sc, evidence:e.evidence||'' })
+      queue.push([e.target, depth + 1])
+    }
+  }
+  const summary = chain.length === 0 ? '无已知因果关系' :
+    `发现 ${chain.length} 条因果边，${chain.filter(c=>c.relation==='blocked_by').length} 阻塞/${chain.filter(c=>c.relation==='causes'&&c.failure_rate>0.5).length} 高风险`
+  return { root: key, depth: maxDepth, chains: chain, summary }
+}
+
+function summarizeCausal(chain) {
+  if (!chain || chain.length === 0) return '无已知因果关系'
+  const parts = []
+  const blocked = chain.filter(c => c.relation === 'blocked_by')
+  const highRisk = chain.filter(c => c.relation === 'causes' && c.failure_rate > 0.5)
+  const mitigations = chain.filter(c => c.relation === 'mitigates')
+  if (blocked.length) parts.push(`${blocked.length}个阻塞: ${blocked.map(c=>c.to).join(',')}`)
+  if (highRisk.length) parts.push(`${highRisk.length}个高风险因果: ${highRisk.map(c=>`${c.from}→${c.to}(${(c.failure_rate*100).toFixed(0)}%)`).join(',')}`)
+  if (mitigations.length) parts.push(`${mitigations.length}个缓解方案: ${mitigations.map(c=>c.to).join(',')}`)
+  return parts.join(' | ') || '因果链已建立，风险较低'
+}
+
 // ---- SEARCH ----
 
 function searchGraph(query, limit = 10) {
@@ -512,5 +579,6 @@ module.exports = {
   getConnectedComponents, expandKeys,
   buildExtractionPrompt, parseExtractionResult, applyRelations,
   searchGraph, getStats,
-  getWarnings, formatWarnings
+  getWarnings, formatWarnings,
+  recordExposure, recordOutcome, getCausalChain, summarizeCausal
 }

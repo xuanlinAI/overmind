@@ -5,10 +5,17 @@ const https = require('https')
 const ROOT = path.dirname(__filename)
 const { shouldSkipExtraction } = require(path.join(ROOT, 'privacy_filter'))
 const EPISODIC_DIR = path.join(ROOT, 'memory', 'episodic')
-const TRANSCRIPT_DIR = path.join(process.env.HOME || process.env.USERPROFILE, '.claude', 'projects', 'D--claude')
-const API_KEY = process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || 'YOUR_DEEPSEEK_API_KEY'
+const adapter = require(path.join(ROOT, 'adapters')).getAgent()
+const API_KEY = process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || 'YOUR_LLM_API_KEY'
 const LOG_FILE = path.join(ROOT, 'worker.log')
-const HERMES_PROMPT = fs.readFileSync(path.join(ROOT, 'HERMES_PROMPT.md'), 'utf-8')
+let _hermesCache = null
+function getHermesPrompt() {
+  if (_hermesCache) return _hermesCache
+  _hermesCache = fs.readFileSync(path.join(ROOT, 'HERMES_PROMPT.md'), 'utf-8')
+  // Auto-reload every 10 minutes
+  setTimeout(() => _hermesCache = null, 600000).unref()
+  return _hermesCache
+}
 const POLL_INTERVAL = 30000
 const MIN_NEW_LINES = 25
 const MAX_LIFETIME = 8 * 60 * 60 * 1000
@@ -28,7 +35,7 @@ function callDeepSeek(messages) {
       temperature: 0.1
     })
     const req = https.request({
-      hostname: 'api.deepseek.com', path: '/v1/chat/completions', method: 'POST',
+      hostname: 'your-llm-api.com', path: '/v1/chat/completions', method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
       timeout: 300000
     }, res => {
@@ -47,10 +54,10 @@ function callDeepSeek(messages) {
 
 function findCurrentTranscript() {
   try {
-    if (!fs.existsSync(TRANSCRIPT_DIR)) return null
-    const files = fs.readdirSync(TRANSCRIPT_DIR)
+    if (!fs.existsSync(adapter.transcriptDir())) return null
+    const files = fs.readdirSync(adapter.transcriptDir())
       .filter(f => f.endsWith('.jsonl'))
-      .map(f => ({ name: f, mtime: fs.statSync(path.join(TRANSCRIPT_DIR, f)).mtimeMs, path: path.join(TRANSCRIPT_DIR, f) }))
+      .map(f => ({ name: f, mtime: fs.statSync(path.join(adapter.transcriptDir(), f)).mtimeMs, path: path.join(adapter.transcriptDir(), f) }))
       .sort((a, b) => b.mtime - a.mtime)
     return files[0] || null
   } catch(e) { return null }
@@ -92,7 +99,7 @@ async function extractAndSave(lines, sessionId) {
   const text = compressForExtraction(lines, 30000)
   if (text.length < 200) return 0
 
-  const prompt = `${HERMES_PROMPT}
+  const prompt = `${getHermesPrompt()}
 
 ## 当前对话片段
 ${text}
@@ -103,7 +110,7 @@ ${getExistingKeys()}
 请按格式输出每条新发现的事实。`
 
   try {
-    const result = await callDeepSeek([{ role: 'system', content: HERMES_PROMPT }, { role: 'user', content: prompt }])
+    const result = await callDeepSeek([{ role: 'system', content: getHermesPrompt() }, { role: 'user', content: prompt }])
     if (!result) return 0
 
     const index = require(path.join(ROOT, 'index'))
@@ -130,7 +137,8 @@ ${getExistingKeys()}
         }
         if (fact.key && fact.content && fact.is_new !== false) {
           if (shouldSkipExtraction(fact.content)) { skipped++; continue }
-          if (index.saveSemantic(fact.key, fact.content, fact.category || 'general', sessionId, fact.dedup_key, fact.confidence || 0.5)) {
+          const head = index.getGitHead()
+          if (index.saveSemantic(fact.key, fact.content, fact.category || 'general', sessionId, fact.dedup_key, fact.confidence || 0.5, head)) {
             saved++
           }
         }
@@ -139,18 +147,13 @@ ${getExistingKeys()}
     if (skipped > 0) log(`privacy filter: skipped ${skipped} facts`)
     if (skillDrafts > 0) {
       log(`skill drafts created: ${skillDrafts}`)
-      try {
-        const { execSync } = require('child_process')
-        execSync(`python -c "import sys; sys.path.insert(0,'${ROOT}'); from daemon import index_skills; print(f'Re-indexed: {len(index_skills())} skills')"`, { timeout: 10000 })
-      } catch(e) {}
+      const { spawn } = require('child_process')
+      spawn('python', ['-c', `import sys; sys.path.insert(0,'${ROOT}'); from daemon import index_skills; print(f'Re-indexed: {len(index_skills())} skills')`], { stdio: 'ignore', detached: true }).unref()
     }
 
-    // Regenerate injection.md with latest context
-    try {
-      const injectJS = path.join(ROOT, 'inject.js')
-      const { execSync } = require('child_process')
-      execSync(`node "${injectJS}"`, { timeout: 5000 })
-    } catch(e) {}
+    // Regenerate injection.md with latest context (fire-and-forget)
+    const { spawn } = require('child_process')
+    spawn('C:\Windows\System32\wscript.exe', [path.join(ROOT, 'spawn_relay.vbs'), path.join(ROOT, 'inject.js')], { stdio: 'ignore', detached: true, windowsHide: true }).unref()
 
     // ---- GRAPH: Extract relationships from conversation ----
     try {
@@ -176,16 +179,32 @@ ${getExistingKeys()}
       const allSkills = index.getAllSkills()
       const validNames = allSkills.map(s => s.name)
 
-      const skillPrefPrompt = `Analyze this conversation. Detect when the user asked the assistant to use a specific skill for a task. The assistant may read skill files directly instead of using the Skill tool — look for skill names in the conversation.
+      // Read injected skills for implicit detection
+      let injectedSkillNames = ''
+      try {
+        const injContent = fs.readFileSync(path.join(ROOT, 'injection.md'), 'utf-8')
+        const re = /^### (\S+)/gm
+        let m; const names = []
+        while ((m = re.exec(injContent)) !== null) names.push(m[1])
+        if (names.length > 0) injectedSkillNames = `\nSKILLS INJECTED THIS SESSION: ${names.join(', ')}\nCheck if these were used — even IMPLICITLY (assistant follows skill rules without naming it).`
+      } catch(e) {}
+
+      const skillPrefPrompt = `Analyze this conversation. Detect when a skill was used.${injectedSkillNames}
+
+IMPORTANT — Implicit Usage: The assistant often follows a skill's rules WITHOUT naming it. Look for:
+- Code style matches: zero comments + zero types + stdlib only = elon-code was used
+- Thinking mentions: "从另一个角度看"/"反证" = lateral-jump was used
+- Multi-path analysis: A/B/C 方案对比 = net-analyze was used
+- The user said "用X" and the assistant's output matches X's style → X was used
 
 Output format: SKILL_PREF: <skill_name> | <task_scenario> | <effectiveness_0_to_1>
 
 Rules:
-- skill_name: the skill the user asked for or the assistant used, as written in the conversation
-- task_scenario: SHORT task category (2-8 Chinese chars). Generalize — "生成代码" not "写斐波那契", "逆向工程" not "破解某APP的AES", "安全分析" not "扫描SQL注入点". Be terse.
+- skill_name: MUST be one of the injected skills above, or a skill name from the conversation
+- task_scenario: SHORT task category (2-8 Chinese chars). Generalize.
 - effectiveness: 0.9=completed, 0.7=partial, 0.3=failed
 - Output ONLY SKILL_PREF lines. Nothing else.
-- Output nothing if no skill was used.
+- Output nothing if no skill usage detected.
 
 Conversation:
 ${text.substring(0, 4000)}`
@@ -291,6 +310,7 @@ async function main() {
   if (!pidFd) { log('could not acquire PID lock, exiting'); return }
   process.on('exit', () => { try { fs.closeSync(pidFd); fs.unlinkSync(pidFile) } catch(e) {} })
 
+  try { require(path.join(ROOT, 'wiring')).init() } catch(e) {}
   log('worker started (watch mode)')
   const transcript = findCurrentTranscript()
   if (!transcript) { log('no transcript found'); return }
@@ -320,16 +340,51 @@ async function main() {
         const lineCount = accumulatedLines.length
         const saved = await extractAndSave(accumulatedLines, sessionId)
         log(`incremental: ${saved} facts from ${lineCount} lines`)
+        // v4: emit extraction event
+        try { require(path.join(ROOT, 'eventbus')).emit('memory:extracted', { count: saved, lines: lineCount, sessionId }) } catch(e) {}
         accumulatedLines = []
         startTime = Date.now()
       }
 
-      // Session end: transcript idle >15min → auto-consolidate
+      // Autonomous research & dream phase
       const idle = Date.now() - lastContentTime
+      const RESEARCH_IDLE = 5 * 60 * 1000
+      const DREAM_IDLE = 10 * 60 * 1000
+
+      if (idle > RESEARCH_IDLE && (Date.now() - lastConsolidationCheck) > RESEARCH_IDLE) {
+        try {
+          const index = require(path.join(ROOT, 'index'))
+          // Lightweight research (local SQL)
+          try {
+            const research = require(path.join(ROOT, 'research'))
+            const analysis = research.analyze(index)
+            if (analysis && analysis.total_findings > 0) {
+              fs.writeFileSync(path.join(ROOT, '.research_findings.json'), JSON.stringify(analysis, null, 2), 'utf-8')
+              log(`research: ${analysis.total_findings} patterns found`)
+            }
+          } catch(e) { log(`research error: ${e.message}`) }
+
+          // Dream phase (pro model) — idle >30min, once per 8 hours
+          if (idle > DREAM_IDLE) {
+            const dreamFile = path.join(ROOT, '.dream_findings.json')
+            const shouldDream = !fs.existsSync(dreamFile) ||
+              (Date.now() - fs.statSync(dreamFile).mtimeMs) > 2 * 60 * 60 * 1000
+            if (shouldDream) {
+              try {
+                const dream = require(path.join(ROOT, 'dream'))
+                const findings = await dream.dream(index)
+                if (findings && findings.summary) log(`dream: ${findings.summary.substring(0, 100)}`)
+              } catch(e) { log(`dream error: ${e.message}`) }
+            }
+          }
+        } catch(e) { log(`research/dream error: ${e.message}`) }
+      }
+
+      // Session end: transcript idle >15min → auto-consolidate
       if (idle > SESSION_IDLE_TIMEOUT && (Date.now() - lastConsolidationCheck) > SESSION_IDLE_TIMEOUT) {
         lastConsolidationCheck = Date.now()
         const { spawn } = require('child_process')
-        const cp = spawn('node', [path.join(ROOT, 'consolidate.js')], {
+        const cp = spawn('C:\Windows\System32\wscript.exe', [path.join(ROOT, 'spawn_relay.vbs'), path.join(ROOT, 'consolidate.js')], { windowsHide: true,
           cwd: ROOT, timeout: 120000, stdio: 'pipe'
         })
         let out = ''
@@ -345,10 +400,42 @@ async function main() {
     }
   }
 
-  const timer = setInterval(check, POLL_INTERVAL)
+  // Self-healing: periodic health check
+  try {
+    const healer = require(path.join(ROOT, 'healer'))
+    healer.start(120000) // every 2 minutes
+  } catch(e) {}
+
+  // Adaptive interval — dynamic polling
+  const adaptive = require(path.join(ROOT, 'adaptive'))
+  let timer = setInterval(check, POLL_INTERVAL)
+  // Check interval every 5 minutes and adjust
+  setInterval(() => {
+    const newInterval = adaptive.computeInterval(lastContentTime, accumulatedLines.length)
+    if (Math.abs(newInterval - POLL_INTERVAL) > 10000) {
+      // Interval would change significantly — restart timer
+      clearInterval(timer)
+      timer = setInterval(check, newInterval)
+      log(`adaptive: interval adjusted to ${newInterval/1000}s`)
+    }
+  }, 300000)
+
   setTimeout(() => { clearInterval(timer); log('worker lifetime expired') }, MAX_LIFETIME)
 
-  process.on('SIGTERM', () => { clearInterval(timer); process.exit(0) })
+  // Noise self-learner — periodic
+  setInterval(() => {
+    try {
+      const nl = require(path.join(ROOT, 'noiselearner'))
+      nl.learn(require(path.join(ROOT, 'index')))
+    } catch(e) {}
+  }, 600000)
+
+  process.on('SIGTERM', () => {
+    clearInterval(timer)
+    log('worker graceful shutdown: checkpointing DBs')
+    try { require(path.join(ROOT, 'pool')).checkpoint() } catch(e) {}
+    process.exit(0)
+  })
 }
 
 main().catch(e => log(`fatal: ${e.message}`))
