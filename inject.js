@@ -740,9 +740,20 @@ async function main() {
     if (verify && verify.flags.length > 0) shieldText = shield.formatShield(verify)
   } catch(e) {}
 
-  // Phase 1: Write lite injection immediately — fast, zero API delay
+  // Phase 1: Use last full injection if available, otherwise write lite
   const liteMems = keywordMems.slice(0, 5)
-  let liteDoc = buildInjection({ mems: liteMems, skills: [], stats, projCtx, userTask, issueMems, taskPlan: null, skillStatus: '⏳ AI 筛选中…', warningText: liteWarningText, personaText, compactionText })
+  let liteDoc = ''
+  const prevFullInjection = path.join(ROOT, '.full_injection.md')
+  if (fs.existsSync(prevFullInjection)) {
+    // Use last session's full injection — instant, no AI delay
+    liteDoc = fs.readFileSync(prevFullInjection, 'utf-8')
+    // Replace stale stats with current stats
+    liteDoc = liteDoc.replace(/语义\d+条/, `语义${stats.semanticCount}条`)
+    liteDoc = liteDoc.replace(/技能\d+个/, `技能${stats.skillCount}个`)
+  } else {
+    // Fallback: minimal lite injection
+    liteDoc = buildInjection({ mems: liteMems, skills: [], stats, projCtx, userTask, issueMems, taskPlan: null, skillStatus: '⏳ AI 筛选中…', warningText: liteWarningText, personaText, compactionText })
+  }
   // Inject post-build sections
   if (preloadText) liteDoc = liteDoc.replace('## 相关记忆', preloadText + '\n## 相关记忆')
   if (anomalyText) liteDoc = liteDoc.replace('## 相关记忆', anomalyText + '\n## 相关记忆')
