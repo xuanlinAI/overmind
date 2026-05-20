@@ -1,6 +1,6 @@
 {
   "name": "xuanlin-overmind",
-  "version": "4.0.0",
+  "version": "v4",
   "description": "CC 的外挂认知引擎 — 66 模块 · 5 层记忆 · 知识图谱推理 · 红队审查 · 自进化",
   "author": "玄霖AI (xuanlinAI)",
   "hooks": {
