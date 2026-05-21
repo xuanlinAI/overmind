@@ -116,7 +116,7 @@ CC：（重新生成）这是基于你项目里实际存在的 getUserById 写�
 
 ## 重构版 vs 初版
 
-| 维度 | v1 初版 | v4 重构版 |
+| 维度 | v4 初版 | v4 重构版 |
 |------|---------|-----------|
 | 启动速度 | 8-12 秒 | < 2 秒 |
 | 内存占用 | 600-900 MB | 120-200 MB |
@@ -256,7 +256,7 @@ Red-team review · Security interception · Output shield · Commit gate · TDD 
 
 ## Refactored v4 vs Original
 
-| Aspect | v1 Original | v4 Refactored |
+| Aspect | v4 Original | v4 Refactored |
 |--------|-------------|---------------|
 | Startup | 8-12s | <2s |
 | Memory | 600-900MB | 120-200MB |
