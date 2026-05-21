@@ -1,6 +1,7 @@
 const { execSync, spawn } = require('child_process')
 const fs = require('fs'), path = require('path')
 const os = require('os')
+const readline = require('readline')
 
 const ROOT = path.dirname(__filename)
 const HOME = os.homedir()
@@ -13,6 +14,31 @@ const READY = require('./.overmind/installer/ready')
 const LOGGER = require('./.overmind/installer/lib/logger')
 const BACKUP = require('./.overmind/installer/lib/backup')
 const PLATFORM = require('./.overmind/installer/lib/platform')
+
+function promptAPI(defaults) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+    const config = { ...defaults }
+    const steps = [
+      { key: 'baseUrl', label: 'API 端点 (OpenAI/Anthropic 兼容)', default: defaults.baseUrl },
+      { key: 'apiKey', label: 'API Key', default: defaults.apiKey || 'sk-xxx' },
+      { key: 'flashModel', label: 'Flash 模型 (快速/便宜)', default: defaults.flashModel },
+      { key: 'proModel', label: 'Pro 模型 (深度分析)', default: defaults.proModel },
+    ]
+    let i = 0
+    function ask() {
+      if (i >= steps.length) { rl.close(); resolve(config); return }
+      const s = steps[i++]
+      const d = s.default ? ` [${s.default}]` : ''
+      rl.question(`  ${s.label}${d}: `, (answer) => {
+        const v = answer.trim()
+        if (v) config[s.key] = v
+        ask()
+      })
+    }
+    ask()
+  })
+}
 
 async function main() {
   const session = LOGGER.startSession('install')
@@ -189,6 +215,38 @@ async function main() {
       w.unref()
       console.log('  ✅ Worker 已启动')
     } catch (e) { console.log('  ⚠️ Worker: ' + e.message); }
+
+    // ═══════════════════════════════════════════════════════
+    // API Configuration — interactive prompt
+    // ═══════════════════════════════════════════════════════
+    console.log('')
+    console.log('  ═══════════════════════════════════════')
+    console.log('  API 配置')
+    console.log('  ═══════════════════════════════════════')
+    console.log('')
+    console.log('  按回车使用默认值（DeepSeek），或输入自定义值')
+    console.log('')
+
+    const apiConfig = await promptAPI({
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: process.env.OVERMIND_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || '',
+      flashModel: 'deepseek-v4-flash',
+      proModel: 'deepseek-v4-pro[1m]',
+    })
+
+    // Write to .overmind_env.json
+    envConfig.api = apiConfig
+    CONFIG.write(envConfig)
+    console.log('  ✅ API 配置已写入 .overmind_env.json')
+
+    // Also write to settings.json env for CC hooks
+    settings.env = settings.env || {}
+    if (apiConfig.apiKey && !apiConfig.apiKey.includes('YOUR_')) {
+      settings.env.OVERMIND_API_KEY = apiConfig.apiKey
+      if (apiConfig.baseUrl) settings.env.OVERMIND_BASE_URL = apiConfig.baseUrl
+      fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2) + '\n', 'utf-8')
+      console.log('  ✅ API key 已写入 settings.json env (CC 自动注入)')
+    }
 
     // Summary
     console.log('')
