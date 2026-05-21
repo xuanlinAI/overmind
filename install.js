@@ -201,7 +201,7 @@ async function main() {
       if (envConfig.features.disabled.length > 0) console.log('  已禁用: ' + envConfig.features.disabled.map(f => f.id).join(', '))
       console.log('')
     }
-    console.log('  1. 设置 API key: export DEEPSEEK_API_KEY=sk-xxx')
+    console.log('  1. 设置 API key: export OVERMIND_API_KEY=sk-xxx (也支持 DEEPSEEK_API_KEY / ANTHROPIC_AUTH_TOKEN)')
     console.log('  2. 重启 Claude Code')
     console.log('  3. 输入任意内容 — 应看到超脑注入')
     console.log('')

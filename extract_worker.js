@@ -10,7 +10,7 @@ const ROOT = path.dirname(__filename)
 const { shouldSkipExtraction } = require(path.join(ROOT, 'privacy_filter'))
 const EPISODIC_DIR = path.join(ROOT, 'memory', 'episodic')
 const adapter = require(path.join(ROOT, 'adapters')).getAgent()
-const API_KEY = process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || ''
+const API_KEY = process.env.OVERMIND_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || ''
 const LOG_FILE = path.join(ROOT, 'worker.log')
 let _hermesCache = null
 function getHermesPrompt() {

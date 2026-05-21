@@ -5,7 +5,7 @@ const https = require('https')
 const fs = require('fs')
 const path = require('path')
 const ROOT = path.dirname(__filename)
-const API_KEY = process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || 'YOUR_LLM_API_KEY'
+const API_KEY = process.env.OVERMIND_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || 'YOUR_LLM_API_KEY'
 
 function callFlash(prompt) {
   return new Promise((resolve, reject) => {

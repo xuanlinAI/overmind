@@ -56,7 +56,7 @@ function writeInjection(content) {
 const EPISODIC_DIR = path.join(ROOT, 'memory', 'episodic')
 const { detectTranscriptDir } = require(path.join(ROOT, 'util'))
 const TRANSCRIPT_DIR = detectTranscriptDir() || path.join(process.env.HOME || process.env.USERPROFILE, '.claude', 'projects', 'D--claude')
-const API_KEY = process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || 'YOUR_LLM_API_KEY'
+const API_KEY = process.env.OVERMIND_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || 'YOUR_LLM_API_KEY'
 
 if (!fs.existsSync(EPISODIC_DIR)) fs.mkdirSync(EPISODIC_DIR, { recursive: true })
 
