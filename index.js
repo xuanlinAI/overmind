@@ -619,7 +619,7 @@ function syncSkillPrefsToFile() {
 
 function getGitHead() {
   try {
-    return require('child_process').execSync('git rev-parse --short HEAD', { encoding:'utf-8', timeout:2000, stdio:['ignore','pipe','ignore'] }).trim()
+    const { execHidden } = require('./exec_hidden'); return execHidden('git', ['rev-parse', '--short', 'HEAD'], { encoding:'utf-8', timeout:2000 }).trim()
   } catch(e) { return null }
 }
 

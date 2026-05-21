@@ -86,4 +86,75 @@ function formatAnomalies(list) {
     list.map(a => `${sev[a.severity]||''} ${a.message}\n> ${a.suggestion}`).join('\n\n') + '\n'
 }
 
-module.exports = { detect, formatAnomalies }
+module.exports = { detect, formatAnomalies, detectFleetAnomaly }
+
+function detectFleetAnomaly(instances) {
+  if (!instances || instances.length < 2) return null
+
+  try {
+    const fs = require('fs'), path = require('path')
+    const alerts = []
+
+    // 1. Same file access check
+    const activeInstances = instances.filter(i => i.status === 'active')
+    const topics = activeInstances.map(i => ({ id: i.id || '?', topic: (i.topic || '').toLowerCase(), cwd: i.cwd || '' }))
+
+    for (let i = 0; i < topics.length - 1; i++) {
+      for (let j = i + 1; j < topics.length; j++) {
+        const a = topics[i], b = topics[j]
+
+        // Check for same project/file mentions
+        const filePattern = /([a-z0-9_\-./]+\.[a-z]{1,6})/g
+        const filesA = new Set((a.topic.match(filePattern) || []).map(f => f.toLowerCase()))
+        const filesB = new Set((b.topic.match(filePattern) || []).map(f => f.toLowerCase()))
+        const common = [...filesA].filter(f => filesB.has(f))
+
+        if (common.length > 0) {
+          alerts.push({
+            type: 'fleet_conflict',
+            severity: 'high',
+            message: `⚠️ 两个 CC 可能在同一文件工作: ${common.slice(0, 3).join(', ')}`,
+            instances: [a.id.substring(0, 8), b.id.substring(0, 8)],
+            suggestion: `建议分工协调，避免合并冲突`
+          })
+        }
+
+        // Check for same topic overlap
+        const wordsA = new Set(a.topic.split(/[，,、\s]+/).filter(w => w.length > 2))
+        const wordsB = new Set(b.topic.split(/[，,、\s]+/).filter(w => w.length > 2))
+        const commonWords = [...wordsA].filter(w => wordsB.has(w))
+
+        if (commonWords.length >= 3) {
+          alerts.push({
+            type: 'fleet_overlap',
+            severity: 'medium',
+            message: `两个 CC 话题高度重叠: ${commonWords.slice(0, 5).join(', ')}`,
+            instances: [a.id.substring(0, 8), b.id.substring(0, 8)],
+            suggestion: `考虑合并任务或明确分工`
+          })
+        }
+      }
+    }
+
+    // 2. Same working directory
+    const cwdCount = {}
+    for (const inst of activeInstances) {
+      const c = inst.cwd || ''
+      if (c) cwdCount[c] = (cwdCount[c] || 0) + 1
+    }
+    for (const [cwd, count] of Object.entries(cwdCount)) {
+      if (count > 1) {
+        const sharing = activeInstances.filter(i => (i.cwd || '') === cwd)
+        alerts.push({
+          type: 'shared_cwd',
+          severity: 'low',
+          message: `${count} 个 CC 共享工作目录: ${cwd}`,
+          instances: sharing.map(i => (i.id || '?').substring(0, 8)),
+          suggestion: `共享目录注意文件锁和冲突`
+        })
+      }
+    }
+
+    return alerts.length > 0 ? alerts : null
+  } catch(e) { return null }
+}

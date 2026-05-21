@@ -13,7 +13,7 @@ function callAPI(messages) {
       messages: messages.map(m => ({ role: m.role, content: m.content }))
     })
     const req = https.request({
-      hostname: 'your-llm-api.com', path: '/anthropic/v1/messages', method: 'POST',
+      hostname: 'api.deepseek.com', path: '/anthropic/v1/messages', method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01' }
     }, res => {
       let data = ''

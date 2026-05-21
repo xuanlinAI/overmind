@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "entries": [
+    { "path": "daemon.py", "category": "system", "criticalFor": ["claude-code"], "platforms": ["all"], "templatePath": "" },
+    { "path": "wiring.js", "category": "system", "criticalFor": ["claude-code"], "platforms": ["all"], "templatePath": "" },
+    { "path": "inject.js", "category": "system", "criticalFor": ["claude-code"], "platforms": ["all"], "templatePath": "" },
+    { "path": "consolidate.js", "category": "system", "criticalFor": ["claude-code"], "platforms": ["all"], "templatePath": "" },
+    { "path": "extract_worker.js", "category": "system", "criticalFor": ["claude-code"], "platforms": ["all"], "templatePath": "" },
+    { "path": "communicator.js", "category": "system", "criticalFor": ["claude-code"], "platforms": ["all"], "templatePath": "" },
+    { "path": "eventbus.js", "category": "system", "criticalFor": ["claude-code"], "platforms": ["all"], "templatePath": "" },
+    { "path": "pipeline.js", "category": "system", "criticalFor": ["claude-code"], "platforms": ["all"], "templatePath": "" },
+    { "path": "stages.js", "category": "system", "criticalFor": ["claude-code"], "platforms": ["all"], "templatePath": "" },
+    { "path": "platform.js", "category": "system", "criticalFor": ["claude-code"], "platforms": ["all"], "templatePath": "" },
+    { "path": "exec_hidden.js", "category": "system", "criticalFor": ["claude-code"], "platforms": ["all"], "templatePath": "" },
+    { "path": "orchestrator.js", "category": "system", "criticalFor": ["claude-code"], "platforms": ["all"], "templatePath": "" },
+    { "path": "inject_launcher.vbs", "category": "system", "criticalFor": ["claude-code"], "platforms": ["windows"], "templatePath": "templates/hook.windows.vbs" },
+    { "path": "consolidate_launcher.vbs", "category": "system", "criticalFor": ["claude-code"], "platforms": ["windows"], "templatePath": "templates/hook.windows.vbs" },
+    { "path": "spawn_relay.vbs", "category": "system", "criticalFor": ["claude-code"], "platforms": ["windows"], "templatePath": "templates/spawn_relay.vbs" },
+    { "path": "launcher.vbs", "category": "system", "criticalFor": ["claude-code"], "platforms": ["windows"], "templatePath": "templates/hook.windows.vbs" },
+    { "path": "_launch.pyw", "category": "system", "criticalFor": ["claude-code"], "platforms": ["windows"], "templatePath": "" },
+    { "path": "launcher.exe", "category": "system", "criticalFor": ["claude-code"], "platforms": ["windows"], "templatePath": "" },
+    { "path": "memory.db", "category": "generated", "criticalFor": [], "platforms": ["all"], "templatePath": "" },
+    { "path": "graph.db", "category": "generated", "criticalFor": [], "platforms": ["all"], "templatePath": "" },
+    { "path": "injection.md", "category": "generated", "criticalFor": [], "platforms": ["all"], "templatePath": "" },
+    { "path": ".fleet_broadcast.md", "category": "generated", "criticalFor": [], "platforms": ["all"], "templatePath": "" },
+    { "path": ".overmind_env.json", "category": "generated", "criticalFor": [], "platforms": ["all"], "templatePath": "" },
+    { "path": "inject.log", "category": "generated", "criticalFor": [], "platforms": ["all"], "templatePath": "" },
+    { "path": "worker.log", "category": "generated", "criticalFor": [], "platforms": ["all"], "templatePath": "" }
+  ]
+}

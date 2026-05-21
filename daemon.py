@@ -1,8 +1,21 @@
-"""Context Proxy MCP server — Python implementation"""
-import json, sys, os, sqlite3, hashlib, re, time, glob, jieba
+"""Xuanlin Overmind z2 Hub — MCP server + FleetWatcher broadcast"""
+import json, sys, os, sqlite3, hashlib, re, time, glob, jieba, threading, tempfile, subprocess
+
+# pythonw on Windows has sys.stdout = None — redirect to devnull to prevent
+# process hang when print() buffer fills (subsystem-level deadlock)
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, 'w')
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, 'w')
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-HOME = os.environ.get('HOME') or os.environ.get('USERPROFILE') or 'C:/Users/Administrator'
+HOME = os.environ.get('HOME') or os.environ.get('USERPROFILE') or os.path.expanduser('~')
+CC_SESSIONS_DIR = os.path.join(HOME, '.claude', 'sessions')
+CC_PROJECTS_DIR = os.path.join(HOME, '.claude', 'projects')
+FLEET_BROADCAST_FILE = os.path.join(ROOT, '.fleet_broadcast.md')
+EVENT_QUEUE_DIR = os.path.join(ROOT, '.event_queue')
+FLEET_STATE_FILE = os.path.join(ROOT, '.fleet_state.json')
+SCAN_INTERVAL = 5  # seconds
 SKILL_DIRS = [
     os.path.join(ROOT, 'skills'),                          # custom skills
     os.path.join(HOME, '.claude', 'skills'),               # CC skills dir
@@ -21,20 +34,20 @@ def init_db():
     db.execute('CREATE TABLE IF NOT EXISTS semantic (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT UNIQUE, content TEXT, tags TEXT DEFAULT "", created_at TEXT DEFAULT (datetime("now")), updated_at TEXT DEFAULT (datetime("now")), access_count INTEGER DEFAULT 0)')
     for col, ctype in [('confidence', 'REAL DEFAULT 0.5'), ('last_accessed', 'TEXT'), ('promotion_count', 'INTEGER DEFAULT 0'), ('content_hash', 'TEXT')]:
         try: db.execute(f'ALTER TABLE semantic ADD COLUMN {col} {ctype}')
-        except: pass
+        except Exception: pass
     for col, ctype in [('version', "TEXT DEFAULT '1.0.0'"), ('requires', 'TEXT'), ('provides', 'TEXT'), ('invoke_count', 'INTEGER DEFAULT 0'), ('last_invoked', 'TEXT'), ('quality_score', 'REAL DEFAULT 0.3')]:
         try: db.execute(f'ALTER TABLE skill_index ADD COLUMN {col} {ctype}')
-        except: pass
+        except Exception: pass
     try: db.execute('CREATE VIRTUAL TABLE IF NOT EXISTS semantic_fts USING fts5(key, content, tags, tokenize="unicode61")')
-    except: pass
+    except Exception: pass
     try: db.execute('ALTER TABLE semantic ADD COLUMN source_session TEXT')
-    except: pass
+    except Exception: pass
     try: db.execute('ALTER TABLE semantic ADD COLUMN dedup_key TEXT')
-    except: pass
+    except Exception: pass
     try: db.execute('ALTER TABLE semantic ADD COLUMN procedural_source TEXT')
-    except: pass
+    except Exception: pass
     try: db.execute('CREATE INDEX IF NOT EXISTS idx_semantic_dedup ON semantic(dedup_key)')
-    except: pass
+    except Exception: pass
     db.execute('''CREATE TABLE IF NOT EXISTS episodic (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         session_id TEXT NOT NULL,
@@ -58,7 +71,7 @@ def init_db():
         created_at TEXT DEFAULT (datetime("now"))
     )''')
     try: db.execute('CREATE VIRTUAL TABLE IF NOT EXISTS procedural_fts USING fts5(name, description, steps, trigger_patterns, tokenize="unicode61")')
-    except: pass
+    except Exception: pass
     db.execute("INSERT OR IGNORE INTO semantic (key, content, tags) VALUES ('_schema_version', '1', 'system')")
     db.execute('CREATE INDEX IF NOT EXISTS idx_semantic_stale ON semantic(last_accessed, updated_at)')
     db.commit()
@@ -70,7 +83,7 @@ db = init_db()
 
 for col, ctype in [('effectiveness_score', 'REAL DEFAULT 0.5'), ('last_effective_at', 'TEXT'), ('ineffective_count', 'INTEGER DEFAULT 0'), ('injected_count', 'INTEGER DEFAULT 0')]:
     try: db.execute(f'ALTER TABLE semantic ADD COLUMN {col} {ctype}')
-    except: pass
+    except Exception: pass
 
 db.execute('''CREATE TABLE IF NOT EXISTS feedback_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,7 +93,7 @@ db.execute('''CREATE TABLE IF NOT EXISTS feedback_events (
     detail TEXT DEFAULT "",
     created_at TEXT DEFAULT (datetime("now")))''')
 try: db.execute('CREATE INDEX IF NOT EXISTS idx_feedback_key ON feedback_events(memory_key)')
-except: pass
+except Exception: pass
 
 db.execute('''CREATE TABLE IF NOT EXISTS skill_feedback (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,7 +104,7 @@ db.execute('''CREATE TABLE IF NOT EXISTS skill_feedback (
     effectiveness REAL DEFAULT 0.5,
     created_at TEXT DEFAULT (datetime("now")))''')
 try: db.execute('CREATE INDEX IF NOT EXISTS idx_skillfb_name ON skill_feedback(skill_name)')
-except: pass
+except Exception: pass
 
 db.execute('''CREATE TABLE IF NOT EXISTS skill_prefs (
     skill_name TEXT NOT NULL,
@@ -116,7 +129,7 @@ def record_feedback(memory_key, event_type, session_id='', detail=''):
             db.execute("UPDATE semantic SET access_count = COALESCE(access_count, 0) + 1, last_accessed = datetime('now') WHERE key = ?", (memory_key,))
         db.commit()
         return True
-    except: return False
+    except Exception: return False
 
 def prune_ineffective_mems():
     bad = db.execute("SELECT key, content, COALESCE(effectiveness_score,0.5) as eff, COALESCE(ineffective_count,0) as nc FROM semantic WHERE key != '_schema_version' AND ineffective_count >= 3 AND COALESCE(effectiveness_score, 0.5) < 0.2").fetchall()
@@ -157,9 +170,9 @@ def init_graph():
     gdb.execute('CREATE INDEX IF NOT EXISTS idx_gedges_tgt ON edges(target)')
     gdb.execute('CREATE INDEX IF NOT EXISTS idx_gedges_type ON edges(relation_type)')
     try: gdb.execute("ALTER TABLE edges ADD COLUMN updated_at TEXT")
-    except: pass
+    except Exception: pass
     try: gdb.execute("CREATE VIRTUAL TABLE IF NOT EXISTS edges_fts USING fts5(source, target, relation_type, evidence, tokenize='unicode61')")
-    except: pass
+    except Exception: pass
     gdb.commit()
     return gdb
 
@@ -179,12 +192,12 @@ def upsert_edge(source, target, relation_type, confidence=0.5, evidence='', sess
         gdb.commit()
         if cur.lastrowid:
             try: gdb.execute('INSERT INTO edges_fts(rowid, source, target, relation_type, evidence) VALUES (?,?,?,?,?)', (cur.lastrowid, source, target, relation_type, evidence))
-            except: pass
+            except Exception: pass
             gdb.execute('INSERT OR IGNORE INTO nodes (key) VALUES (?)', (source,))
             gdb.execute('INSERT OR IGNORE INTO nodes (key) VALUES (?)', (target,))
             gdb.commit()
             return cur.lastrowid
-    except: pass
+    except Exception: pass
     return None
 
 def get_neighbors(key, depth=2):
@@ -234,7 +247,7 @@ def search_graph(query, limit=10):
         return [{'source': r[0], 'target': r[1], 'relation_type': r[2], 'confidence': r[3], 'evidence': r[4] or ''} for r in rows]
     try:
         rows = gdb.execute("SELECT e.source, e.target, e.relation_type, e.confidence, e.evidence FROM edges_fts f JOIN edges e ON f.rowid = e.id WHERE edges_fts MATCH ? ORDER BY rank LIMIT ?", (query, limit)).fetchall()
-    except:
+    except Exception:
         like = f'%{query}%'
         rows = gdb.execute('SELECT source, target, relation_type, confidence, evidence FROM edges WHERE source LIKE ? OR target LIKE ? OR relation_type LIKE ? OR evidence LIKE ? ORDER BY confidence DESC LIMIT ?', (like, like, like, like, limit)).fetchall()
     return [{'source': r[0], 'target': r[1], 'relation_type': r[2], 'confidence': r[3], 'evidence': r[4] or ''} for r in rows]
@@ -319,7 +332,7 @@ def search_hybrid(query, limit=10):
             rows = db.execute(
                 "SELECT s.rowid, s.key, s.content, s.tags, rank, COALESCE(m.effectiveness_score, 0.5), COALESCE(m.injected_count, 0), COALESCE(m.ineffective_count, 0) FROM semantic_fts s JOIN semantic m ON s.key = m.key WHERE semantic_fts MATCH ? AND s.key != '_schema_version' ORDER BY rank LIMIT ?",
                 (fts_query, limit)).fetchall()
-        except:
+        except Exception:
             rows = db.execute(
                 "SELECT id, key, content, tags, COALESCE(effectiveness_score, 0.5), COALESCE(injected_count, 0), COALESCE(ineffective_count, 0) FROM semantic WHERE key != '_schema_version' ORDER BY updated_at DESC LIMIT ?",
                 (limit,)).fetchall()
@@ -353,7 +366,7 @@ def call_ai_api(messages, max_tokens=16384, timeout=120):
         'max_tokens': max_tokens,
         'messages': messages
     }).encode('utf-8')
-    req = urllib.request.Request('https://your-llm-api.com/v1/chat/completions',
+    req = urllib.request.Request('https://api.deepseek.com/v1/chat/completions',
         data=body,
         headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {API_KEY}'})
     resp = urllib.request.urlopen(req, timeout=timeout)
@@ -404,11 +417,11 @@ def select_memories_ai(query, all_mems, limit=5):
             return shortlist[:limit]
         names = []
         try: names = json.loads(result.strip())
-        except:
+        except Exception:
             m = re.search(r'\[.*\]', result, re.DOTALL)
             if m:
                 try: names = json.loads(m.group(0))
-                except: pass
+                except Exception: pass
         if not isinstance(names, list):
             return shortlist[:limit]
         selected = []
@@ -418,7 +431,7 @@ def select_memories_ai(query, all_mems, limit=5):
                     selected.append(m)
                     break
         return selected[:limit] if selected else shortlist[:limit]
-    except:
+    except Exception:
         return shortlist[:limit]
 
 def search_hybrid_ai(query, limit=10):
@@ -431,6 +444,63 @@ def search_hybrid_ai(query, limit=10):
     for r in result:
         update_confidence(r['key'], 0.02)
     return result
+
+def auto_tag_skill(name, desc, content=''):
+    """Extract matching keywords from skill name + description + body"""
+    tags = set()
+    text = (name + ' ' + desc + ' ' + (content or '')[:1000]).lower()
+
+    # 1. Extract English technical terms (only camelCase, snake_case, dot.case — not plain words)
+    for m in re.finditer(r'\b([a-z]+(?:[A-Z][a-z]+)+|[a-z]+_[a-z]+|[a-z]+\.[a-z]+)\b', text):
+        word = m.group(1)
+        if len(word) >= 4:
+            tags.add(word.lower())
+    # Also extract ALL_CAPS acronyms (FTS5, JSON, API, etc) — 2-6 uppercase letters
+    for m in re.finditer(r'\b([A-Z]{2,6})\b', text):
+        tags.add(m.group(1))
+
+    # 2. Chinese technical bigrams (2-4 chars, filter common words)
+    cjk = re.findall(r'[一-鿿]{2,4}', text)
+    stop_cjk = {'使用','可以','需要','一个','这个','进行','通过','所有','什么','怎么','如何','如果','或者','但是','因为','所以','已经','没有','不是','只是','还是','并且','然后','其中','之后','之前','包含','以及'}
+    for w in cjk:
+        if w not in stop_cjk:
+            tags.add(w)
+
+    # 3. Tech domain keywords from name
+    name_low = name.lower()
+    domain_map = {
+        'reverse': ['逆向', 'reverse', '反汇编', 'decompile'],
+        'encrypt': ['加密', 'encrypt', '签名', 'sign', 'AES', 'RSA', 'SM2', 'SM4', 'HMAC', 'MD5'],
+        'frida': ['frida', 'hook', '注入', 'inject'],
+        'js': ['javascript', 'JS', 'AST', '反混淆', 'deobfuscate'],
+        'binary': ['二进制', 'binary', 'native', 'so文件', 'elf'],
+        'api': ['API', 'http', 'fetch', '接口', '请求'],
+        'wechat': ['微信', 'wechat', '小程序', 'miniprogram'],
+        'proxy': ['代理', 'proxy', 'mitmproxy', '抓包'],
+        'ticket': ['抢票', 'ticket', '预约', 'booking'],
+        'skill': ['技能', 'skill', '自动', 'auto'],
+        'review': ['审查', 'review', '代码质量'],
+        'test': ['测试', 'test', 'benchmark'],
+        'debug': ['调试', 'debug', '日志', 'log'],
+        'clean': ['清理', 'clean', '删除', 'remove'],
+        'inject': ['注入', 'inject', 'injection'],
+        'evolve': ['进化', 'evolve', '自进化', 'self'],
+    }
+    for key, terms in domain_map.items():
+        if key in name_low:
+            for t in terms:
+                tags.add(t)
+
+    # 4. Fallback: extract keywords from name itself (split on hyphen/underscore)
+    if not tags:
+        for part in re.split(r'[-_]', name):
+            if len(part) >= 3:
+                tags.add(part.lower())
+
+    # 5. Merge and return
+    result = ','.join(sorted(tags)[:80])  # cap at 80 tags
+    return result
+
 
 def index_skills():
     skills = []
@@ -459,7 +529,7 @@ def index_skills():
                         trigger_str = triggers.group(1) if triggers else ''
                         db.execute('INSERT OR REPLACE INTO skill_index (name, description, triggers, file_path) VALUES (?,?,?,?)', (meta['name'], desc, trigger_str, os.path.join(root, 'SKILL.md')))
                         skills.append({'name': meta['name'], 'description': desc, 'triggers': trigger_str})
-            except:
+            except Exception:
                 pass
     # Also index flat .md files from skills/all/ (auto-created by Worker)
     all_dir = os.path.join(ROOT, 'skills', 'all')
@@ -484,8 +554,16 @@ def index_skills():
                         trigger_str = triggers.group(1) if triggers else ''
                         name = meta['name']
                         db.execute('INSERT OR REPLACE INTO skill_index (name, description, triggers, file_path) VALUES (?,?,?,?)', (name, desc, trigger_str, fpath))
+                        # Auto-tag: generate matching_tags from name+desc+content if empty
+                        existing_tags = db.execute('SELECT matching_tags FROM skill_index WHERE name=?', (name,)).fetchone()
+                        if not existing_tags or not (existing_tags[0] or '').strip():
+                            # Use full content as fallback if desc is empty (YAML block scalars)
+                            tag_text = desc if desc and len(desc) > 10 else content
+                            tags = auto_tag_skill(name, tag_text, content)
+                            if tags:
+                                db.execute('UPDATE skill_index SET matching_tags=? WHERE name=?', (tags, name))
                         skills.append({'name': name, 'description': desc, 'triggers': trigger_str})
-            except:
+            except Exception:
                 pass
 
     db.commit()
@@ -499,7 +577,7 @@ def search_procedural(query, limit=5):
     else:
         try:
             rows = db.execute("SELECT rowid, name, description, steps, trigger_patterns, rank FROM procedural_fts WHERE procedural_fts MATCH ? ORDER BY rank LIMIT ?", (q, limit)).fetchall()
-        except:
+        except Exception:
             rows = db.execute("SELECT id, name, description, steps, trigger_patterns FROM procedural WHERE (description LIKE ? OR name LIKE ?) AND status='active' LIMIT ?", (f'%{query.split()[0]}%', f'%{query.split()[0]}%', limit)).fetchall()
     return [{'name': r[1], 'description': r[2], 'steps': r[3], 'triggers': r[4]} for r in rows]
 
@@ -512,7 +590,7 @@ def save_procedural(name, description, steps, triggers=''):
     try:
         db.execute('DELETE FROM procedural_fts WHERE name = ?', (name,))
         db.execute('INSERT INTO procedural_fts(name, description, steps, trigger_patterns) VALUES (?,?,?,?)', (name, description, steps, triggers))
-    except: pass
+    except Exception: pass
     db.commit()
 
 def score_skills():
@@ -543,7 +621,7 @@ def prune_low_quality_skills():
         for r in rows:
             db.execute('DELETE FROM skill_index WHERE name = ?', (r[0],))
             try: os.remove(r[2]) if r[2] and os.path.exists(r[2]) else None
-            except: pass
+            except Exception: pass
         db.execute("INSERT INTO evolution_log (session_id, action, detail) VALUES ('hermes', 'prune_skills', ?)", (json.dumps({'count': len(rows)}),))
         db.commit()
         return len(rows)
@@ -595,13 +673,13 @@ def save_semantic(key, content, tags='', source_session=None):
     if existing:
         db.execute('UPDATE semantic SET content=?, tags=?, updated_at=datetime("now") WHERE key=?', (content, tags, key))
         try: db.execute('DELETE FROM semantic_fts WHERE key = ?', (key,))
-        except: pass
+        except Exception: pass
         try: db.execute('INSERT INTO semantic_fts(key, content, tags) VALUES (?,?,?)', (key, seg, tags))
-        except: pass
+        except Exception: pass
     else:
         db.execute('INSERT INTO semantic (key, content, tags, source_session) VALUES (?,?,?,?)', (key, content, tags, source_session))
         try: db.execute('INSERT INTO semantic_fts(key, content, tags) VALUES (?,?,?)', (key, seg, tags))
-        except: pass
+        except Exception: pass
     db.commit()
 
 def save_episodic(session_id, summary='', task='', message_count=0, transcript_path='', project_name=''):
@@ -677,8 +755,8 @@ def auto_promote():
             try:
                 seg = ' '.join(jieba.cut(content))
                 db.execute("INSERT OR IGNORE INTO procedural_fts(name, description, trigger_patterns) VALUES (?,?,?)", (key, seg, tags or ''))
-            except: pass
-        except: pass
+            except Exception: pass
+        except Exception: pass
         db.execute("UPDATE semantic SET promotion_count = 1, confidence = MIN(1.0, ?), procedural_source = ? WHERE key = ?", (ac * 0.1 + conf, key, key))
         db.execute("INSERT INTO evolution_log (session_id, action, detail) VALUES ('hermes', 'auto_promote', ?)", (json.dumps({'key': key, 'reason': 'procedural_pattern'}),))
         events.append({'key': key, 'action': 'promoted_to_procedural'})
@@ -692,7 +770,7 @@ def analyze_skills_with_pro():
 
     # Add matching_tags column if needed
     try: db.execute('ALTER TABLE skill_index ADD COLUMN matching_tags TEXT DEFAULT \"\"')
-    except: pass
+    except Exception: pass
 
     rows = db.execute('SELECT name, file_path, description FROM skill_index WHERE 1=1').fetchall()
     if not rows: return {'analyzed': 0}
@@ -704,7 +782,7 @@ def analyze_skills_with_pro():
         try:
             with open(fp, encoding='utf-8') as f:
                 body = f.read()[:600]
-        except:
+        except Exception:
             body = desc or ''
         catalog += f'### {name}\n{body}\n\n'
 
@@ -725,7 +803,7 @@ Skills:
             'max_tokens': 16384,
             'messages': [{'role': 'user', 'content': prompt}]
         }).encode('utf-8')
-        req = urllib.request.Request('https://your-llm-api.com/anthropic/v1/messages',
+        req = urllib.request.Request('https://api.deepseek.com/anthropic/v1/messages',
             data=body,
             headers={'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01'})
         resp = urllib.request.urlopen(req, timeout=300)
@@ -748,7 +826,7 @@ Skills:
         try:
             db.execute('UPDATE skill_index SET matching_tags = ? WHERE name = ?', (tags, name))
             analyzed += 1
-        except: pass
+        except Exception: pass
     db.commit()
     db.execute("INSERT INTO evolution_log (session_id, action, detail) VALUES ('hermes', 'analyze_skills', ?)", (json.dumps({'count': analyzed}),))
     db.commit()
@@ -787,7 +865,7 @@ def evolve_with_ai():
             'max_tokens': 16384,
             'messages': [{'role': 'user', 'content': prompt}]
         }).encode('utf-8')
-        req = urllib.request.Request('https://your-llm-api.com/anthropic/v1/messages',
+        req = urllib.request.Request('https://api.deepseek.com/anthropic/v1/messages',
             data=body,
             headers={'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01'})
         resp = urllib.request.urlopen(req, timeout=300)
@@ -803,7 +881,7 @@ def evolve_with_ai():
     try:
         m = re.search(r'\{.*\}', result, re.DOTALL)
         plan = json.loads(m.group(0)) if m else {}
-    except:
+    except Exception:
         plan = {}
 
     merged = 0; deprecated = 0; workflows = 0
@@ -817,13 +895,13 @@ def evolve_with_ai():
             # Save merged version
             db.execute("INSERT OR REPLACE INTO semantic (key, content, tags, confidence) VALUES (?,?,?,'merged',0.8)", (nk, nc))
             try: db.execute("INSERT OR REPLACE INTO semantic_fts(key, content, tags) VALUES (?,?,?)", (nk, ' '.join(jieba.cut(nc)), 'merged'))
-            except: pass
+            except Exception: pass
             # Mark old as deprecated
             for k in keys:
                 db.execute("UPDATE semantic SET tags = 'deprecated', confidence = 0.1 WHERE key = ?", (k,))
             db.execute("INSERT INTO evolution_log (session_id, action, detail) VALUES ('hermes', 'ai_merge', ?)", (json.dumps({'keys': keys, 'new': nk}),))
             merged += 1
-        except: pass
+        except Exception: pass
 
     # Apply deprecations
     for dk in plan.get('deprecate', []):
@@ -831,7 +909,7 @@ def evolve_with_ai():
             db.execute("UPDATE semantic SET tags = 'deprecated', confidence = 0.1 WHERE key = ?", (dk,))
             db.execute("INSERT INTO evolution_log (session_id, action, detail) VALUES ('hermes', 'ai_deprecate', ?)", (json.dumps({'key': dk}),))
             deprecated += 1
-        except: pass
+        except Exception: pass
 
     # Apply workflows
     for wf in plan.get('workflows', []):
@@ -841,10 +919,10 @@ def evolve_with_ai():
             steps_text = '\n'.join(ss)
             db.execute("INSERT OR REPLACE INTO procedural (name, description, steps, trigger_patterns) VALUES (?,?,?,?)", (n, d or '', steps_text, t))
             try: db.execute("INSERT OR REPLACE INTO procedural_fts(name, description, trigger_patterns) VALUES (?,?,?)", (n, ' '.join(jieba.cut(d or '')), t))
-            except: pass
+            except Exception: pass
             db.execute("INSERT INTO evolution_log (session_id, action, detail) VALUES ('hermes', 'ai_workflow', ?)", (json.dumps({'name': n, 'steps': len(ss)}),))
             workflows += 1
-        except: pass
+        except Exception: pass
 
     db.commit()
     return {'merged': merged, 'deprecated': deprecated, 'workflows': workflows}
@@ -868,7 +946,7 @@ def search_warnings(query):
     # Search graph for dangerous edges matching query
     try:
         rows = gdb.execute("SELECT e.source, e.target, e.relation_type, e.confidence, e.evidence FROM edges_fts f JOIN edges e ON f.rowid = e.id WHERE edges_fts MATCH ? AND e.relation_type IN ('blocked_by','conflicts_with','causes') AND e.confidence >= 0.4 ORDER BY rank LIMIT 10", (query,)).fetchall()
-    except:
+    except Exception:
         like = f'%{query}%'
         rows = gdb.execute("SELECT source, target, relation_type, confidence, evidence FROM edges WHERE (source LIKE ? OR target LIKE ? OR evidence LIKE ?) AND relation_type IN ('blocked_by','conflicts_with','causes') AND confidence >= 0.4 ORDER BY confidence DESC LIMIT 10", (like, like, like)).fetchall()
 
@@ -928,7 +1006,285 @@ def get_skill_prefs(skill_name=None):
 
 # Index existing skills on startup
 try: index_skills()
-except: pass
+except Exception: pass
+
+# ═══════════════════════════════════════════════════════════
+# z2 HUB: FleetWatcher — scans all CC sessions, broadcasts
+# ═══════════════════════════════════════════════════════════
+
+class FleetWatcher:
+    def __init__(self):
+        self.running = True
+        self.last_broadcast = ''
+        self.lockfile = os.path.join(ROOT, '.fleetwatcher.lock')
+
+    def start(self):
+        t = threading.Thread(target=self._loop, daemon=True)
+        t.start()
+
+    def _loop(self):
+        while self.running:
+            try:
+                self._scan_and_broadcast()
+                self._check_triggers()
+            except Exception:
+                pass
+            time.sleep(SCAN_INTERVAL)
+
+    def _check_triggers(self):
+        trigger_inject = os.path.join(ROOT, '.trigger_inject')
+        trigger_inject_tmp = trigger_inject + '.tmp'
+        trigger_consolidate = os.path.join(ROOT, '.trigger_consolidate')
+        trigger_consolidate_tmp = trigger_consolidate + '.tmp'
+        try:
+            # Atomic consume: rename(tmp→real) before processing
+            if os.path.exists(trigger_inject_tmp):
+                try: os.rename(trigger_inject_tmp, trigger_inject)
+                except OSError: pass
+            if os.path.exists(trigger_consolidate_tmp):
+                try: os.rename(trigger_consolidate_tmp, trigger_consolidate)
+                except OSError: pass
+            if os.path.exists(trigger_inject):
+                os.remove(trigger_inject)
+                subprocess.Popen(
+                    ['node', os.path.join(ROOT, 'inject.js')],
+                    creationflags=0x08000000 | 0x00000008,
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    close_fds=True)
+            if os.path.exists(trigger_consolidate):
+                os.remove(trigger_consolidate)
+                subprocess.Popen(
+                    ['node', os.path.join(ROOT, 'consolidate.js')],
+                    creationflags=0x08000000 | 0x00000008,
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    close_fds=True)
+        except Exception:
+            pass
+
+    def _scan_and_broadcast(self):
+        sessions = self._discover_sessions()
+        if not sessions:
+            return
+        for s in sessions:
+            self._extract_qa(s)
+        md = self._build_broadcast(sessions)
+        if md == self.last_broadcast:
+            return
+        self.last_broadcast = md
+        self._write_broadcast(md)
+        self._push_event_queue(sessions)
+
+    def _discover_sessions(self):
+        sessions = []
+        if not os.path.exists(CC_SESSIONS_DIR):
+            return sessions
+        for fname in os.listdir(CC_SESSIONS_DIR):
+            if not fname.endswith('.json'):
+                continue
+            try:
+                with open(os.path.join(CC_SESSIONS_DIR, fname), 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                sessions.append({
+                    'id': data.get('sessionId', fname.replace('.json', '')),
+                    'pid': data.get('pid', 0),
+                    'cwd': data.get('cwd', ''),
+                    'status': 'active' if data.get('status') == 'busy' else 'idle',
+                    'started_at': data.get('startedAt'),
+                    'updated_at': data.get('updatedAt'),
+                    'version': data.get('version', ''),
+                })
+            except Exception:
+                pass
+        return sessions
+
+    def _extract_qa(self, s):
+        qa_pairs = []
+        try:
+            # Dynamic: find the project dir containing this session's transcript
+            proj_dir = None
+            try:
+                for dname in os.listdir(CC_PROJECTS_DIR):
+                    dpath = os.path.join(CC_PROJECTS_DIR, dname)
+                    if not os.path.isdir(dpath):
+                        continue
+                    candidate = os.path.join(dpath, s['id'] + '.jsonl')
+                    if os.path.exists(candidate):
+                        proj_dir = dpath
+                        break
+            except Exception:
+                pass
+            if proj_dir is None:
+                return
+            jsonl = os.path.join(proj_dir, f"{s['id']}.jsonl")
+            if not os.path.exists(jsonl):
+                return
+            s['transcript_mtime'] = os.path.getmtime(jsonl)
+            s['recently_active'] = (time.time() - s['transcript_mtime']) < 300
+
+            with open(jsonl, 'r', encoding='utf-8', errors='ignore') as f:
+                lines = f.readlines()
+
+            pairs = []
+            current_q = None
+            current_a = None
+
+            for line in reversed(lines[-500:]):
+                try:
+                    entry = json.loads(line.strip())
+                except Exception:
+                    continue
+
+                # Extract user text (skip tool results)
+                if entry.get('type') == 'user' and not current_q:
+                    msg = entry.get('message', {})
+                    if isinstance(msg, dict) and msg.get('role') == 'user':
+                        content = msg.get('content', '')
+                        if isinstance(content, str) and content.strip():
+                            current_q = content.strip()
+                        elif isinstance(content, list):
+                            for part in content:
+                                if isinstance(part, dict) and part.get('text'):
+                                    txt = part['text'].strip()
+                                    if txt and len(txt) > 10:
+                                        current_q = txt
+                                        break
+                    continue
+
+                # Extract assistant text
+                if entry.get('type') == 'assistant' and current_q and not current_a:
+                    msg = entry.get('message', {})
+                    if isinstance(msg, dict) and msg.get('role') == 'assistant':
+                        content = msg.get('content', '')
+                        if isinstance(content, str) and content.strip():
+                            current_a = content.strip()
+                        elif isinstance(content, list):
+                            texts = []
+                            for part in content:
+                                if isinstance(part, dict) and part.get('text'):
+                                    texts.append(part['text'].strip())
+                            if texts:
+                                current_a = '\n'.join(texts)
+
+                if current_q and current_a:
+                    pairs.append({'q': current_q[:200], 'a': current_a[:300]})
+                    current_q = None
+                    current_a = None
+                    if len(pairs) >= 2:
+                        break
+
+            s['qa_pairs'] = pairs
+
+            # Detect topic from ai-title
+            for line in reversed(lines[-100:]):
+                try:
+                    entry = json.loads(line.strip())
+                    if entry.get('aiTitle'):
+                        s['topic'] = entry['aiTitle']
+                        break
+                except Exception:
+                    pass
+            if 'topic' not in s:
+                s['topic'] = pairs[0]['q'][:80] if pairs else '(idle)'
+
+        except Exception:
+            s['qa_pairs'] = []
+            s['topic'] = '(idle)'
+            s['recently_active'] = False
+
+    def _build_broadcast(self, sessions):
+        # Merge with fleet_state (Overmind registrations)
+        overmind = {}
+        try:
+            if os.path.exists(FLEET_STATE_FILE):
+                with open(FLEET_STATE_FILE, 'r', encoding='utf-8') as f:
+                    fs = json.load(f)
+                for inst in fs.get('instances', []):
+                    overmind[inst['id']] = inst
+        except Exception:
+            pass
+
+        lines = ['📡 舰队广播 z2']
+        lines.append(f'> {len(sessions)} 个实例 · {time.strftime("%H:%M:%S")} 刷新\n')
+
+        our_session = None
+        try:
+            with open(os.path.join(CC_SESSIONS_DIR, [f for f in os.listdir(CC_SESSIONS_DIR) if f.endswith('.json')][0]), 'r') as f:
+                pass
+        except Exception:
+            pass
+
+        for s in sessions:
+            sid = s['id'][:8]
+            om = overmind.get(s['id'])
+            has_om = bool(om)
+            status_icon = '🟢' if s.get('recently_active') else '⚪'
+            om_icon = '🧠' if has_om else '👁️'
+            topic = (s.get('topic') or '(idle)')[:80]
+
+            lines.append(f'### {sid} [{om_icon}] {status_icon} {topic}')
+
+            qa = s.get('qa_pairs', [])
+            if qa:
+                for pair in qa:
+                    q_text = pair['q'][:120].replace('\n', ' ')
+                    a_text = pair['a'][:200].replace('\n', ' ')
+                    lines.append(f'> ❓ {q_text}')
+                    lines.append(f'> 💬 {a_text}')
+            lines.append('')
+
+        # Conflict check
+        active_topics = [s.get('topic', '')[:50] for s in sessions if s.get('recently_active')]
+        if len(active_topics) > 1 and len(set(active_topics)) < len(active_topics):
+            lines.append('⚠️ 多个实例可能在做同一件事\n')
+
+        # Locks from orchestrator
+        active_locks = []
+        for om_id, om in overmind.items():
+            if om.get('current_topic'):
+                active_locks.append(f"{om_id[:8]}=>{om['current_topic'][:40]}")
+        if active_locks:
+            lines.append('🔒 任务锁: ' + ', '.join(active_locks) + '\n')
+
+        return '\n'.join(lines)
+
+    def _write_broadcast(self, md):
+        try:
+            with open(FLEET_BROADCAST_FILE, 'w', encoding='utf-8') as f:
+                f.write(md)
+        except Exception:
+            pass
+
+    def _push_event_queue(self, sessions):
+        try:
+            os.makedirs(EVENT_QUEUE_DIR, exist_ok=True)
+            data = {
+                'event': 'fleet:broadcast',
+                'ts': int(time.time() * 1000),
+                'data': {
+                    'count': len(sessions),
+                    'instances': [{
+                        'id': s['id'][:8],
+                        'topic': s.get('topic', '')[:120],
+                        'status': 'active' if s.get('recently_active') else 'idle',
+                        'qa': s.get('qa_pairs', []),
+                        'cwd': s.get('cwd', ''),
+                    } for s in sessions]
+                }
+            }
+            fpath = os.path.join(EVENT_QUEUE_DIR, f"fleet_broadcast_{int(time.time() * 1000)}.json")
+            with open(fpath, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False)
+        except Exception:
+            pass
+
+
+# Start z2 FleetWatcher
+_watcher = FleetWatcher()
+_watcher.start()
+
+# ═══════════════════════════════════════════════════════════
+# MCP HANDLER
+# ═══════════════════════════════════════════════════════════
 
 def handle(req):
     mid = req.get('id')
@@ -974,7 +1330,10 @@ def handle(req):
             {'name': 'record_feedback', 'description': '记录记忆使用反馈（injected/referenced/helped/did_not_help/caused_confusion）', 'inputSchema': {'type': 'object', 'properties': {'memory_key': {'type': 'string'}, 'event_type': {'type': 'string', 'description': 'injected/referenced/helped/did_not_help/caused_confusion'}, 'session_id': {'type': 'string'}, 'detail': {'type': 'string'}}, 'required': ['memory_key', 'event_type']}},
             {'name': 'search_warnings', 'description': '检测当前任务相关的危险信号（阻塞/冲突/失败模式）', 'inputSchema': {'type': 'object', 'properties': {'query': {'type': 'string', 'description': '当前任务描述或关键词'}}, 'required': ['query']}},
             {'name': 'skill_rankings', 'description': '技能效果排行榜（按完成率排序）', 'inputSchema': {'type': 'object', 'properties': {'limit': {'type': 'number'}}}},
-            {'name': 'skill_prefs', 'description': '查询技能使用偏好（什么任务用什么技能）', 'inputSchema': {'type': 'object', 'properties': {'skill_name': {'type': 'string', 'description': '可选，查询特定技能偏好'}}}}
+            {'name': 'skill_prefs', 'description': '查询技能使用偏好（什么任务用什么技能）', 'inputSchema': {'type': 'object', 'properties': {'skill_name': {'type': 'string', 'description': '可选，查询特定技能偏好'}}}},
+            # ── z2 fleet tools ──
+            {'name': 'fleet_status', 'description': '查询所有CC实例状态（自动发现，无需注入）', 'inputSchema': {'type': 'object', 'properties': {}}},
+            {'name': 'fleet_peek', 'description': '窥探指定CC会话的最新动态（最近5对Q/A）', 'inputSchema': {'type': 'object', 'properties': {'session_id': {'type': 'string', 'description': '会话ID前8位或完整ID'}}, 'required': ['session_id']}}
         ]}})
 
     if method == 'tools/call':
@@ -1011,7 +1370,7 @@ def handle(req):
                     skill_name = m.group(1)
                     db.execute("UPDATE skill_index SET invoke_count = COALESCE(invoke_count, 0) + 1, last_invoked = datetime('now') WHERE name = ?", (skill_name,))
                 db.commit()
-            except:
+            except Exception:
                 ctx = 'injection.md not found'
             return send_msg({'jsonrpc': '2.0', 'id': mid, 'result': {'content': [{'type': 'text', 'text': ctx}]}})
         if tool == 'hermes_fusion':
@@ -1065,13 +1424,77 @@ def handle(req):
         if tool == 'skill_prefs':
             prefs = get_skill_prefs(args.get('skill_name'))
             return send_msg({'jsonrpc': '2.0', 'id': mid, 'result': {'content': [{'type': 'text', 'text': json.dumps(prefs, ensure_ascii=False)}]}})
+        if tool == 'fleet_status':
+            # Reuse FleetWatcher's scan results from broadcast file
+            try:
+                with open(FLEET_BROADCAST_FILE, 'r', encoding='utf-8') as f:
+                    text = f.read()
+            except Exception:
+                text = '舰队广播未就绪，请稍候'
+            return send_msg({'jsonrpc': '2.0', 'id': mid, 'result': {'content': [{'type': 'text', 'text': text}]}})
+        if tool == 'fleet_peek':
+            sid = args.get('session_id', '')
+            qa_pairs = []
+            try:
+                # Dynamic: scan all project dirs for this session
+                jsonl = None
+                try:
+                    for dname in os.listdir(CC_PROJECTS_DIR):
+                        dpath = os.path.join(CC_PROJECTS_DIR, dname)
+                        if not os.path.isdir(dpath):
+                            continue
+                        for fname in os.listdir(dpath):
+                            if fname.endswith('.jsonl') and sid[:8] in fname:
+                                jsonl = os.path.join(dpath, fname)
+                                break
+                        if jsonl:
+                            break
+                except Exception:
+                    pass
+                if jsonl:
+                    with open(jsonl, 'r', encoding='utf-8', errors='ignore') as f:
+                        lines = f.readlines()
+                    pairs = []
+                    cur_q = None; cur_a = None
+                    for line in reversed(lines[-800:]):
+                        try:
+                            entry = json.loads(line.strip())
+                        except Exception:
+                            continue
+                        if entry.get('type') == 'user' and not cur_q:
+                            msg = entry.get('message', {})
+                            if isinstance(msg, dict):
+                                c = msg.get('content', '')
+                                if isinstance(c, str) and c.strip(): cur_q = c.strip()
+                                elif isinstance(c, list):
+                                    for p in c:
+                                        if isinstance(p, dict) and p.get('text'):
+                                            cur_q = p['text'].strip(); break
+                            continue
+                        if entry.get('type') == 'assistant' and cur_q and not cur_a:
+                            msg = entry.get('message', {})
+                            if isinstance(msg, dict):
+                                c = msg.get('content', '')
+                                if isinstance(c, str) and c.strip(): cur_a = c.strip()
+                                elif isinstance(c, list):
+                                    txts = [p['text'].strip() for p in c if isinstance(p, dict) and p.get('text')]
+                                    if txts: cur_a = '\n'.join(txts)
+                        if cur_q and cur_a:
+                            pairs.append({'q': cur_q[:200], 'a': cur_a[:300]})
+                            cur_q = None; cur_a = None
+                            if len(pairs) >= 5: break
+                    qa_pairs = pairs
+            except Exception:
+                pass
+            return send_msg({'jsonrpc': '2.0', 'id': mid, 'result': {'content': [{'type': 'text', 'text': json.dumps({'session_id': sid, 'qa_pairs': qa_pairs, 'count': len(qa_pairs)}, ensure_ascii=False)}]}})
 
-# Main loop — raw JSON lines (matching claude_opus_mcp.py pattern)
-while True:
-    req = read_msg()
-    if req is None:
-        break
-    try:
-        handle(req)
-    except:
-        pass
+if __name__ == '__main__':
+    # Main loop — raw JSON lines (matching claude_opus_mcp.py pattern)
+    while True:
+        req = read_msg()
+        if req is None:
+            break
+        try:
+            handle(req)
+        except Exception:
+            pass

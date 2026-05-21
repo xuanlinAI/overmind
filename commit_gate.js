@@ -1,15 +1,15 @@
 // Commit Gate — refuses risky ops unless git state is clean
-const { execSync } = require('child_process')
+const { execHidden } = require('./exec_hidden')
 const path = require('path')
 
 function check(cwd = process.cwd()) {
   let unclean = '', staged = ''
-  try { unclean = execSync('git diff --name-only', { encoding:'utf-8', timeout:3000, cwd }).trim() } catch(e) {}
-  try { staged = execSync('git diff --cached --name-only', { encoding:'utf-8', timeout:3000, cwd }).trim() } catch(e) {}
-  try { execSync('git rev-parse --git-dir', { timeout:2000, cwd }) } catch(e) { return null } // not a git repo
+  try { unclean = execHidden('git', ['diff', '--name-only'], { encoding:'utf-8', timeout:3000, cwd }).trim() } catch(e) {}
+  try { staged = execHidden('git', ['diff', '--cached', '--name-only'], { encoding:'utf-8', timeout:3000, cwd }).trim() } catch(e) {}
+  try { execHidden('git', ['rev-parse', '--git-dir'], { timeout:2000, cwd }) } catch(e) { return null }
 
   const files = (unclean + '\n' + staged).split('\n').filter(Boolean)
-  if (files.length === 0) return null // clean, pass
+  if (files.length === 0) return null
 
   return {
     files: files.slice(0, 10),

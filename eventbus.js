@@ -17,7 +17,11 @@ function off(event, id) {
 }
 
 function emit(event, data) {
-  history.push({ event, data: JSON.parse(JSON.stringify(data)), ts: Date.now() })
+  // Clone safely — handle undefined/null/non-serializable
+  let cloned
+  try { cloned = data != null ? JSON.parse(JSON.stringify(data)) : data }
+  catch(e) { cloned = data }
+  history.push({ event, data: cloned, ts: Date.now() })
   if (history.length > MAX_HISTORY) history.shift()
 
   if (!listeners[event]) return

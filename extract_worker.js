@@ -2,11 +2,15 @@ const path = require('path')
 const fs = require('fs')
 const https = require('https')
 
+process.on('unhandledRejection', (reason) => {
+  try { fs.appendFileSync(path.join(__dirname, 'worker.log'), `${new Date().toISOString()} [worker] unhandledRejection: ${reason?.message || reason}\n`) } catch(e) {}
+})
+
 const ROOT = path.dirname(__filename)
 const { shouldSkipExtraction } = require(path.join(ROOT, 'privacy_filter'))
 const EPISODIC_DIR = path.join(ROOT, 'memory', 'episodic')
 const adapter = require(path.join(ROOT, 'adapters')).getAgent()
-const API_KEY = process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || 'YOUR_LLM_API_KEY'
+const API_KEY = process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || ''
 const LOG_FILE = path.join(ROOT, 'worker.log')
 let _hermesCache = null
 function getHermesPrompt() {
@@ -35,7 +39,7 @@ function callDeepSeek(messages) {
       temperature: 0.1
     })
     const req = https.request({
-      hostname: 'your-llm-api.com', path: '/v1/chat/completions', method: 'POST',
+      hostname: 'api.deepseek.com', path: '/v1/chat/completions', method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
       timeout: 300000
     }, res => {
@@ -148,12 +152,11 @@ ${getExistingKeys()}
     if (skillDrafts > 0) {
       log(`skill drafts created: ${skillDrafts}`)
       const { spawn } = require('child_process')
-      spawn('python', ['-c', `import sys; sys.path.insert(0,'${ROOT}'); from daemon import index_skills; print(f'Re-indexed: {len(index_skills())} skills')`], { stdio: 'ignore', detached: true }).unref()
+      spawn('pythonw', ['-c', `import sys; sys.path.insert(0,'${ROOT}'); from daemon import index_skills; print(f'Re-indexed: {len(index_skills())} skills')`], { stdio: 'ignore', detached: true, windowsHide: true }).unref()
     }
 
-    // Regenerate injection.md with latest context (fire-and-forget)
-    const { spawn } = require('child_process')
-    spawn('C:\Windows\System32\wscript.exe', [path.join(ROOT, 'spawn_relay.vbs'), path.join(ROOT, 'inject.js')], { stdio: 'ignore', detached: true, windowsHide: true }).unref()
+    // Injection refresh handled by CC hooks — removing redundant spawn
+    // that caused triple-fire + lock contention + console flash every 30s
 
     // ---- GRAPH: Extract relationships from conversation ----
     try {
@@ -303,7 +306,7 @@ async function main() {
           try { process.kill(oldPid, 'SIGTERM') } catch(e) {}
         } catch(e) {}
         try { fs.unlinkSync(pidFile) } catch(e) {}
-        require('child_process').execSync('sleep 0.05')
+        require('child_process').execSync(process.platform === 'win32' ? 'ping 127.0.0.1 -n 1 >nul' : 'sleep 0.05', {stdio:'ignore'})
       } else { log(`pid lock error: ${e.message}`); return }
     }
   }
@@ -384,7 +387,7 @@ async function main() {
       if (idle > SESSION_IDLE_TIMEOUT && (Date.now() - lastConsolidationCheck) > SESSION_IDLE_TIMEOUT) {
         lastConsolidationCheck = Date.now()
         const { spawn } = require('child_process')
-        const cp = spawn('C:\Windows\System32\wscript.exe', [path.join(ROOT, 'spawn_relay.vbs'), path.join(ROOT, 'consolidate.js')], { windowsHide: true,
+        const cp = spawn('node', [path.join(ROOT, 'consolidate.js')], { windowsHide: true, detached: true,
           cwd: ROOT, timeout: 120000, stdio: 'pipe'
         })
         let out = ''

@@ -1,5 +1,7 @@
+// daemon_launcher merged — startup log
 const fs = require('fs')
 const path = require('path')
+fs.appendFileSync(path.join(__dirname, 'startup.log'), new Date().toISOString() + ' LAUNCHED\n')
 
 const ROOT = path.dirname(__filename)
 const HOME = process.env.HOME || process.env.USERPROFILE || 'C:/Users/Administrator'

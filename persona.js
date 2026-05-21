@@ -87,4 +87,60 @@ function formatPersona(profile) {
     '\n\n> 越用越了解你。'
 }
 
-module.exports = { analyze, formatPersona }
+module.exports = { analyze, formatPersona, observeFleet }
+
+function observeFleet(instances) {
+  // Cross-CC skill boosting: detect what other CCs are working on
+  // and boost matching skill preferences
+  if (!instances || instances.length === 0) return null
+
+  try {
+    const index = require('./index')
+    index.init()
+
+    const boosts = []
+    for (const inst of instances) {
+      const topic = (inst.topic || '').toLowerCase()
+      const qa = inst.qa || []
+      const allText = topic + ' ' + qa.map(p => (p.q || '') + ' ' + (p.a || '')).join(' ')
+
+      // Detect domain from peer's work
+      const domains = {
+        '逆向工程': [/逆向|reverse|encrypt|解密|破解|frida|xposed|bytecode|虚拟机|smali|native\b|脱壳|反汇编/i],
+        'API开发': [/api|http|fetch|接口|请求|响应|rest|graphql|endpoint/i],
+        '代码审查': [/审查|review|audit|检查|安全|漏洞|bug|fix/i],
+        '数据分析': [/数据分析|爬虫|scrape|parse|数据挖掘|数据清洗/i],
+        '环境配置': [/配置|deploy|install|setup|环境|docker|k8s/i],
+      }
+
+      for (const [domain, patterns] of Object.entries(domains)) {
+        if (patterns.some(p => p.test(allText))) {
+          const prefs = index.upsertSkillPref || null
+
+          // Map domain to skill preferences
+          const skillMap = {
+            '逆向工程': ['enc-signatures', 'jsr-reverse', 'binary-analysis'],
+            'API开发': ['api-explorer', 'api-fetcher'],
+            '代码审查': ['my-review', 'code-quality'],
+            '数据分析': ['data-miner', 'log-analyzer'],
+            '环境配置': ['env-setup', 'docker-ops'],
+          }
+
+          const skills = skillMap[domain] || []
+          for (const sk of skills) {
+            try {
+              index.upsertSkillPref(sk, domain, 0.7)
+              boosts.push({ skill: sk, reason: `同伴 ${inst.id} 在做: ${topic.substring(0,40)}`, domain })
+            } catch(e) {}
+          }
+        }
+      }
+    }
+
+    if (boosts.length > 0) {
+      index.syncSkillPrefsToFile()
+      return { boosted: [...new Set(boosts.map(b => b.skill))], reasons: boosts.slice(0, 5) }
+    }
+    return null
+  } catch(e) { return null }
+}

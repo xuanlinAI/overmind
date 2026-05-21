@@ -1,4 +1,4 @@
-const { execSync } = require('child_process')
+const { execHidden } = require('./exec_hidden')
 const fs = require('fs')
 const path = require('path')
 
@@ -7,7 +7,7 @@ function predict(cwd = process.cwd()) {
 
   // 1. Git branch
   try {
-    const branch = execSync('git branch --show-current', { encoding:'utf-8', timeout:3000, cwd, stdio:['ignore','pipe','ignore'] }).trim()
+    const branch = execHidden('git', ['branch', '--show-current'], { encoding:'utf-8', timeout:3000, cwd }).trim()
     if (branch && branch !== 'main' && branch !== 'master') {
       signals.push({ signal: 'git_branch', value: branch, weight: 0.8 })
     }

@@ -1,0 +1,230 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Xuanlin Overmind v4: Immeasurable Network</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0f;color:#fff;font-family:"PingFang SC","Microsoft YaHei",sans-serif;overflow:hidden}
+.slide{width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;text-align:center;position:absolute;top:0;left:0;opacity:0;transition:opacity .6s}
+.slide.active{opacity:1}
+nav{position:fixed;bottom:20px;right:30px;z-index:100}
+nav button{background:rgba(74,158,255,.15);border:1px solid rgba(74,158,255,.3);color:#4a9eff;padding:8px 16px;margin:0 4px;border-radius:4px;cursor:pointer}
+nav button:hover{background:rgba(74,158,255,.3)}
+h1{font-size:72px;font-weight:300;letter-spacing:4px}
+h2{font-size:42px;font-weight:300;color:#4a9eff;margin-top:12px}
+h3{font-size:32px;font-weight:300;margin-bottom:30px;color:#4a9eff}
+p{font-size:24px;line-height:1.8;color:rgba(255,255,255,.8);max-width:900px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:30px;max-width:1000px;margin-top:40px}
+.card{background:rgba(74,158,255,.05);border:1px solid rgba(74,158,255,.15);border-radius:12px;padding:30px}
+.card .num{font-size:48px;font-weight:200;color:#4a9eff}
+.card .label{font-size:18px;color:rgba(255,255,255,.6);margin-top:8px}
+.big-num{font-size:96px;font-weight:200;color:#4a9eff;line-height:1}
+.small-label{font-size:20px;color:rgba(255,255,255,.4);margin-top:8px}
+.compare{display:grid;grid-template-columns:repeat(3,1fr);gap:40px;max-width:1100px;margin-top:40px}
+.compare .col{text-align:center}
+.compare .col-header{font-size:28px;margin-bottom:20px;color:#4a9eff}
+.compare .item{font-size:20px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.highlight{color:#4a9eff;font-weight:500}
+.tag{display:inline-block;background:rgba(74,158,255,.1);border:1px solid rgba(74,158,255,.2);padding:4px 16px;border-radius:20px;font-size:16px;margin:4px;color:#4a9eff}
+.flow{display:flex;gap:20px;align-items:center;margin-top:40px}
+.flow-box{background:rgba(74,158,255,.08);border:1px solid rgba(74,158,255,.2);border-radius:8px;padding:20px 30px;font-size:18px}
+.flow-arrow{color:#4a9eff;font-size:24px}
+</style></head><body>
+
+<div class="slide active" id="s1">
+  <h1>Xuanlin Overmind · Immeasurable Network</h1>
+  <h2>Where Memory Becomes Reasoning</h2>
+  <p style="margin-top:40px;font-size:22px;color:rgba(255,255,255,.6)">66-Module Cognitive Nervous System · KG Reasoning · Red-Team Adversary · Self-Evolution</p>
+  <div style="margin-top:20px"><span class="tag">66 Modules</span><span class="tag">18 MCP Tools</span><span class="tag">15 Event Flows</span><span class="tag">5-Layer Memory</span><span class="tag">11 Relations</span><span class="tag">Parallel Broadcast</span></div>
+</div>
+
+<div class="slide" id="s2">
+  <h3>The Problem</h3>
+  <p style="font-size:28px">Claude Code closes a session → memory wiped to zero.<br>Next session starts from scratch.</p>
+  <div class="grid" style="margin-top:50px">
+    <div class="card"><div class="num">0</div><div class="label">Native CC Cross-Session Memory</div></div>
+    <div class="card"><div class="num">40%+</div><div class="label">Context Wasted On Noise</div></div>
+    <div class="card"><div class="num">100+</div><div class="label">Skill Descriptions Repeated Every Turn</div></div>
+  </div>
+</div>
+
+<div class="slide" id="s3">
+  <h3>Five-Layer Memory Architecture</h3>
+  <div class="grid">
+    <div class="card"><div class="num">01</div><div class="label">Semantic Memory<br>SQLite + FTS5 Full-Text</div></div>
+    <div class="card"><div class="num">02</div><div class="label">Procedural Memory<br>Auto-Promoted Workflows</div></div>
+    <div class="card"><div class="num">03</div><div class="label">Episodic Memory<br>AI-Generated Summaries</div></div>
+    <div class="card"><div class="num">04</div><div class="label">知识图谱<br>11 Relations · 因果推理</div></div>
+    <div class="card"><div class="num">05</div><div class="label">Feedback Loop<br>Inject→Ref→Outcome</div></div>
+    <div class="card"><div class="num">★</div><div class="label">Event Bus<br>15 Real-Time Cross-Module Flows</div></div>
+  </div>
+</div>
+
+<div class="slide" id="s4">
+  <h3>Passive Knowledge Reasoning</h3>
+  <p style="font-size:26px;margin-top:30px">Search one → graph auto-expands the causal chain</p>
+  <div class="flow" style="margin-top:50px">
+    <div class="flow-box">Token Signature Unknown</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box" style="border-color:rgba(255,60,60,.3)">OAuth Bypass Unresolved<br><small>blocked_by</small></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box">RS VM Bytecode<br><small>part_of</small></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box">mitmproxy 76 Tokens<br><small>triggers</small></div>
+  </div>
+  <p style="margin-top:40px;color:rgba(255,255,255,.5)">Not RAG. Reasoning.</p>
+</div>
+
+<div class="slide" id="s5">
+  <h3>👿 Red-Team — The Adversarial Twin</h3>
+  <p style="font-size:26px;margin-top:30px">Every output is attacked by an adversarial twin.<br>You only see what survives.</p>
+  <div style="display:flex;gap:40px;margin-top:50px">
+    <div class="card"><div class="num" style="color:#4a9eff">Primary CC</div><div class="label">Generates Code, Plans, Analysis</div></div>
+    <div style="font-size:48px;color:#4a9eff">⚔️</div>
+    <div class="card" style="border-color:rgba(255,60,60,.3)"><div class="num" style="color:#ff3c3c">👿 Red Team</div><div class="label">Finds flaws, contradictions, blind spots<br>Attacks using your user model</div></div>
+    <div style="font-size:48px;color:#4a9eff">→</div>
+    <div class="card"><div class="num" style="color:#fff">✅</div><div class="label">Revised Output<br>Red-team objections annotated</div></div>
+  </div>
+</div>
+
+<div class="slide" id="s6">
+  <h3>Three Nuclear-Grade Features</h3>
+  <div class="grid">
+    <div class="card"><div class="num">🌀</div><div class="label">Counterfactual Engine<br>Shadow timeline: "What if you chose differently?"</div></div>
+    <div class="card"><div class="num">🧠</div><div class="label">Theory of Mind<br>Your cognitive profile: blind spots, errors, skill gaps</div></div>
+    <div class="card"><div class="num">⚖️</div><div class="label">Conflict Arbitration<br>Recency > Effectiveness > Confidence</div></div>
+    <div class="card"><div class="num">🌙</div><div class="label">Dream Phase<br>10min idle → pro model deep fusion, arbitration, prediction</div></div>
+    <div class="card"><div class="num">🔮</div><div class="label">Predictive Debugging<br>git diff → failure pattern match → pre-bug warning</div></div>
+    <div class="card"><div class="num">🚀</div><div class="label">Fleet Mode<br>Multiple CCs share one brain, task-lock coordination</div></div>
+  </div>
+</div>
+
+<div class="slide" id="s7">
+  <h3>Performance — Exponential Dominance</h3>
+  <div class="grid">
+    <div class="card"><div class="big-num">566K</div><div class="small-label">ops/sec</div></div>
+    <div class="card"><div class="big-num">0.001</div><div class="small-label">ms p50 Latency</div></div>
+    <div class="card"><div class="big-num">99.96%</div><div class="small-label">Prompt Cache Hit</div></div>
+    <div class="card"><div class="big-num">$0.05</div><div class="small-label">Daily Cost</div></div>
+    <div class="card"><div class="big-num">66</div><div class="small-label">Functional Modules</div></div>
+    <div class="card"><div class="big-num">0ms</div><div class="small-label">Perceived Latency</div></div>
+  </div>
+</div>
+
+<div class="slide" id="s8">
+  <h3>vs Competitors</h3>
+  <div class="compare">
+    <div class="col"><div class="col-header">Mem0</div>
+      <div class="item">Cloud Service</div><div class="item">Graph Reasoning $249/mo</div><div class="item">~8 Modules</div><div class="item">API Latency 200ms+</div>
+    </div>
+    <div class="col"><div class="col-header" style="color:#fff">Overmind</div>
+      <div class="item highlight">100% Local · Free</div><div class="item highlight">Graph Reasoning Free</div><div class="item highlight">66 Modules</div><div class="item highlight">0.001ms p50</div>
+    </div>
+    <div class="col"><div class="col-header">AgentMemory</div>
+      <div class="item">2 Terminals</div><div class="item">Basic BM25</div><div class="item">~12 Modules</div><div class="item">No Cognitive Features</div>
+    </div>
+  </div>
+  <p style="margin-top:40px;font-size:20px;color:rgba(255,255,255,.4)">They built AI's hard drive. Overmind is AI's brain.</p>
+</div>
+
+<div class="slide" id="s9">
+  <h3>Architecture Overview</h3>
+  <p style="font-size:18px;color:rgba(255,255,255,.5);margin-top:10px">inject.js → 串行管道(21 stages) + Parallel Broadcast(18 modules) → injection.md → CC</p>
+  <div style="display:flex;gap:12px;margin-top:30px;flex-wrap:wrap;max-width:1000px;justify-content:center">
+    <span class="tag">五层记忆</span><span class="tag">因果推理</span><span class="tag">红队审查</span><span class="tag">梦境阶段</span>
+    <span class="tag">技能市场</span><span class="tag">预测调试</span><span class="tag">反事实引擎</span><span class="tag">心理模型</span>
+    <span class="tag">舰队模式</span><span class="tag">事件总线</span><span class="tag">量子缓存</span><span class="tag">自愈系统</span>
+    <span class="tag">记忆预算</span><span class="tag">输出盾</span><span class="tag">技能编排</span><span class="tag">人格画像</span>
+    <span class="tag">异常检测</span><span class="tag">环境预取</span><span class="tag">跨项目迁移</span><span class="tag">时间旅行</span>
+    <span class="tag">提交门禁</span><span class="tag">TDD 执行</span><span class="tag">预算拦截</span><span class="tag">补丁模式</span>
+    <span class="tag">早安简报</span><span class="tag">会话简报</span><span class="tag">僵尸检测</span><span class="tag">安全拦截</span>
+  </div>
+  <p style="margin-top:40px;font-size:20px;color:rgba(255,255,255,.3)">15 Event Flows · 进程间队列 · 看门狗 · 优雅降级</p>
+</div>
+
+<div class="slide" id="s10">
+  <h3>神经系统 — 15 Event Flows + Parallel Broadcast</h3>
+  <div class="flow" style="flex-wrap:wrap;max-width:1000px;justify-content:center">
+    <div class="flow-box">memory:extracted</div><div class="flow-arrow">→</div><div class="flow-box">warning:new</div>
+    <div class="flow-box">dream:complete</div><div class="flow-arrow">→</div><div class="flow-box">persona:refresh</div>
+    <div class="flow-box">composer:chain</div><div class="flow-arrow">→</div><div class="flow-box">skill:hotloaded</div>
+    <div class="flow-box">feedback:recorded</div><div class="flow-arrow">→</div><div class="flow-box">skill:boost</div>
+  </div>
+  <div style="display:flex;gap:40px;margin-top:50px">
+    <div class="card"><div class="num">15</div><div class="label">Event Flows</div></div>
+    <div class="card"><div class="num">18</div><div class="label">Parallel Broadcast模块</div></div>
+    <div class="card"><div class="num">5s</div><div class="label">Timeout Kill Switch</div></div>
+    <div class="card"><div class="num">IPC</div><div class="label">IPC File Queue</div></div>
+  </div>
+</div>
+
+<div class="slide" id="s11">
+  <h3>Universal AI Agent Adaptation</h3>
+  <div class="grid">
+    <div class="card"><div class="num" style="font-size:36px">✅</div><div class="label">Claude Code<br>!include 原生</div></div>
+    <div class="card"><div class="num" style="font-size:36px">✅</div><div class="label">Hermes Agent<br>Plugin 注入</div></div>
+    <div class="card"><div class="num" style="font-size:36px">✅</div><div class="label">Cursor<br>MCP 上下文</div></div>
+    <div class="card"><div class="num" style="font-size:36px">✅</div><div class="label">OpenClaw<br>MCP 注入</div></div>
+    <div class="card"><div class="num" style="font-size:36px">✅</div><div class="label">Codex CLI<br>MCP 上下文</div></div>
+    <div class="card"><div class="num" style="font-size:36px">✅</div><div class="label">Gemini CLI<br>!include</div></div>
+  </div>
+  <p style="margin-top:30px;color:rgba(255,255,255,.4)">Auto-detect agent type · Adapt transcript format · Win/Mac/Linux</p>
+</div>
+
+<div class="slide" id="s12">
+  <h3>Technical Depth — Sub-ms to Cognitive Reasoning</h3>
+  <div class="grid">
+    <div class="card"><div class="num">0.001ms</div><div class="label">p50 核心延迟<br>60/66 Modules亚毫秒</div></div>
+    <div class="card"><div class="num">566K/s</div><div class="label">Throughput<br>Sustained</div></div>
+    <div class="card"><div class="num">84%</div><div class="label">AI Compression Rate<br>3296→496 chars</div></div>
+    <div class="card"><div class="num">$0.05</div><div class="label">Daily Cost<br>6 flash + pro</div></div>
+    <div class="card"><div class="num">99.96%</div><div class="label">Cache Hit<br>390M / 1.73M</div></div>
+    <div class="card"><div class="num">0ms</div><div class="label">Perceived Latency<br>Async lite inject</div></div>
+  </div>
+</div>
+
+<div class="slide" id="s13">
+  <h3>Self-Maintenance — The Silent Ops Team</h3>
+  <div class="grid">
+    <div class="card"><div class="num">🩺</div><div class="label">Self-Healing<br>Worker crash→restart<br>DB corrupt→WAL repair</div></div>
+    <div class="card"><div class="num">🐕</div><div class="label">Watchdog<br>External health check<br>Win/Mac/Linux</div></div>
+    <div class="card"><div class="num">📊</div><div class="label">Memory Budget<br>5-dim scoring<br>Auto-archive low value</div></div>
+    <div class="card"><div class="num">🧹</div><div class="label">Noise Learning<br>3 fails→noise base<br>Auto-filter</div></div>
+    <div class="card"><div class="num">⚡</div><div class="label">Adaptive Worker<br>Active 15s/Cool 60s<br>Deep idle 120s</div></div>
+    <div class="card"><div class="num">🔧</div><div class="label">Hot Reload<br>File change auto<br>reload, no restart</div></div>
+  </div>
+</div>
+
+<div class="slide" id="s14">
+  <h3>v4 Is Not An Upgrade — It's An Awakening</h3>
+  <p style="font-size:26px;margin-top:30px">66 Modules通过 15 Event Flows实时互连。<br>从批处理到神经系统。</p>
+  <div style="margin-top:50px;display:flex;gap:20px;justify-content:center">
+    <div class="card"><div class="num" style="font-size:28px">🔄</div><div class="label">v3 Complete Cognitive System<br>(skipped release)</div></div>
+    <div style="font-size:36px;color:#4a9eff">→</div>
+    <div class="card" style="border-color:#4a9eff"><div class="num" style="font-size:28px">🧠</div><div class="label">v4 Immeasurable Network<br>(public release)</div></div>
+    <div style="font-size:36px;color:#4a9eff">→</div>
+    <div class="card"><div class="num" style="font-size:28px">🌐</div><div class="label">v5 Skill Marketplace Protocol<br>(planned)</div></div>
+  </div>
+  <p style="margin-top:50px;font-size:20px;color:rgba(255,255,255,.3)">Don't release iterations. Release phase changes.</p>
+</div>
+
+<div class="slide" id="s15">
+  <h1>66 Modules · 全线通过</h1>
+  <p style="margin-top:20px">MIT Open Source · github.com/xuanlinAI/overmind</p>
+  <div style="margin-top:50px">
+    <span class="tag" style="font-size:20px;padding:8px 24px">v4 Ready</span>
+  </div>
+</div>
+
+<nav>
+  <button onclick="prev()">←</button>
+  <span style="color:rgba(255,255,255,.3);font-size:14px" id="counter">1/10</span>
+  <button onclick="next()">→</button>
+</nav>
+
+<script>
+let cur=0;const slides=document.querySelectorAll('.slide');
+function show(i){slides.forEach(s=>s.classList.remove('active'));slides[i].classList.add('active');document.getElementById('counter').textContent=(i+1)+'/'+slides.length}
+function next(){cur=(cur+1)%slides.length;show(cur)}
+function prev(){cur=(cur-1+slides.length)%slides.length;show(cur)}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight')next();if(e.key==='ArrowLeft')prev()})
+show(0);
+</script>
+</body></html>

@@ -13,7 +13,7 @@ function callFlashAPI(messages) {
       messages: messages.map(m => ({ role: m.role, content: m.content }))
     })
     const req = https.request({
-      hostname: 'your-llm-api.com', path: '/v1/chat/completions', method: 'POST',
+      hostname: 'api.deepseek.com', path: '/v1/chat/completions', method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
       timeout: 120000
     }, res => {
@@ -38,7 +38,7 @@ function callProAPI(messages) {
       messages: messages.map(m => ({ role: m.role, content: m.content }))
     })
     const req = https.request({
-      hostname: 'your-llm-api.com', path: '/anthropic/v1/messages', method: 'POST',
+      hostname: 'api.deepseek.com', path: '/anthropic/v1/messages', method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01' },
       timeout: 300000
     }, res => {

@@ -9,7 +9,7 @@ function travel(index, dateOrCommit, topic = '') {
   // If it's a commit hash, find its timestamp
   if (/^[a-f0-9]{7,40}$/.test(dateOrCommit)) {
     try {
-      const ts = require('child_process').execSync(`git log -1 --format=%ai ${dateOrCommit}`, { encoding:'utf-8', timeout:3000, cwd: process.cwd() }).trim()
+      const { execHidden } = require('./exec_hidden'); const ts = execHidden('git', ['log', '-1', '--format=%ai', dateOrCommit], { encoding:'utf-8', timeout:3000, cwd: process.cwd() }).trim()
       if (ts) cutoff = ts
     } catch(e) {}
   }

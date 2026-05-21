@@ -1,3 +1,6 @@
+// n2终端 (n2 Terminal) — AI filter + post-filter serial/parallel gateway
+// Original: communicator.filter() — AI flash model filters injection doc
+// z2 expansion: terminalSerial() + terminalBroadcast() — processed output to all modules
 const https = require('https')
 const fs = require('fs')
 const path = require('path')
@@ -12,7 +15,7 @@ function callFlash(prompt) {
       messages: [{ role: 'user', content: prompt }]
     })
     const req = https.request({
-      hostname: 'your-llm-api.com', path: '/v1/chat/completions', method: 'POST',
+      hostname: 'api.deepseek.com', path: '/v1/chat/completions', method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
       timeout: 30000
     }, res => {
@@ -30,7 +33,7 @@ function callFlash(prompt) {
 }
 
 async function filter(fullDoc, userTask, isSessionStart = false) {
-  if (!fullDoc || fullDoc.length < 500) return fullDoc // too short, pass through
+  if (!fullDoc || fullDoc.length < 500) return fullDoc
 
   const mode = isSessionStart ? 'SessionStart' : 'UserPromptSubmit'
 
@@ -75,14 +78,81 @@ Return the FILTERED injection document DIRECTLY (keep the markdown format).
   try {
     const result = await callFlash(prompt)
     if (!result || result.length < 100) {
-      // Fallback: return full doc trimmed
       return fullDoc.substring(0, isSessionStart ? 3000 : 1500)
     }
     return result.trim()
   } catch(e) {
-    // Fallback: return full doc trimmed
     return fullDoc.substring(0, isSessionStart ? 3000 : 1500)
   }
 }
 
-module.exports = { filter }
+// ═══════════════════════════════════════════════════════════
+// CH5: n2终端 串联 — post-filter chain through modules in sequence
+// Each module receives the filtered doc + can enrich/annotate
+// ═══════════════════════════════════════════════════════════
+
+function terminalSerial(filteredDoc, ctx = {}) {
+  const results = {}
+  const chain = [
+    { name: 'persona', fn: () => {
+      try { const m = require('./persona'); const p = m.analyze(ctx.index || require('./index')); return p?.traits?.length > 0 ? `\n## 👤 终端确认\n超脑人格匹配: ${p.traits.slice(0,2).map(t=>t.name).join(', ')}` : null } catch(e) { return null }
+    }},
+    { name: 'continuity', fn: () => {
+      try { const m = require('./continuity'); const r = m.detect(ctx.index || require('./index')); return r?.open_issues?.length > 0 ? `\n## 📋 终端续接\n待解决问题: ${r.open_issues.slice(0,3).join(', ')}` : null } catch(e) { return null }
+    }},
+    { name: 'counterfactual', fn: () => {
+      try { const m = require('./counterfactual'); const r = m.checkDrift(ctx.graph || require('./graph'), ctx.index || require('./index')); return (Array.isArray(r) && r.length > 0) ? `\n## 🔮 终端反事实\n${r.length} 个决策差异需关注` : null } catch(e) { return null }
+    }},
+    { name: 'shield', fn: () => {
+      try { const m = require('./shield'); const v = m.verify(filteredDoc, ctx.index || require('./index')); return v?.flags?.length > 0 ? `\n## 🛡️ 终端盾检\n${v.flags.length} 个风险标记` : null } catch(e) { return null }
+    }},
+    { name: 'noiselearner', fn: () => {
+      try { const m = require('./noiselearner'); const patterns = m.loadPatterns(); const keys = Object.keys(patterns || {}); return keys.length > 0 ? `\n## 🔇 终端降噪\n${keys.length} 个噪声模式已过滤` : null } catch(e) { return null }
+    }},
+    { name: 'lineage', fn: () => {
+      try { const m = require('./lineage'); const skills = ctx.skills || []; return skills.length > 0 ? `\n## 📜 终端血统\n${skills.length} 个技能进入终端` : null } catch(e) { return null }
+    }},
+    { name: 'budget', fn: () => {
+      try { const m = require('./budget'); const r = m.analyze(ctx.index || require('./index')); return r ? `\n## 📊 终端预算\n记忆预算已更新` : null } catch(e) { return null }
+    }},
+    { name: 'briefing', fn: () => {
+      try { const m = require('./briefing'); return `\n## 📋 终端简报\n当前已记录` } catch(e) { return null }
+    }},
+  ]
+
+  for (const stage of chain) {
+    try {
+      const out = stage.fn()
+      if (out && typeof out === 'string' && out.length > 10) {
+        results[stage.name] = out
+      }
+    } catch(e) {
+      results[`${stage.name}_error`] = e.message
+    }
+  }
+
+  return results
+}
+
+// ═══════════════════════════════════════════════════════════
+// CH6: n2终端 并联 — broadcast filtered output to all modules
+// Every module receives what the user will actually see
+// ═══════════════════════════════════════════════════════════
+
+function terminalBroadcast(filteredDoc, ctx = {}) {
+  // This is triggered via bus.emit('terminal:broadcast', data)
+  // The actual parallel fire happens in wiring.js CH5
+  // Here we prepare the broadcast data package
+  return {
+    content: filteredDoc,
+    length: filteredDoc.length,
+    skills: ctx.skills || [],
+    mems: ctx.mems || [],
+    userTask: ctx.userTask || '',
+    isSessionStart: ctx.isSessionStart || false,
+    fleet_context: ctx.fleetContext || null,
+    timestamp: new Date().toISOString()
+  }
+}
+
+module.exports = { filter, terminalSerial, terminalBroadcast }

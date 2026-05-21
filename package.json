@@ -1,4 +1,22 @@
 {
+  "name": "xuanlin-overmind",
+  "version": "4.1.0",
+  "description": "Xuanlin Overmind v4 Refactored — 66-module AI cognitive engine with 6-channel architecture, z2 hub, n2 terminal, adaptive installer",
+  "main": "inject.js",
+  "bin": {
+    "overmind": "./install.js"
+  },
+  "author": "玄霖AI (xuanlinAI)",
+  "license": "MIT",
+  "repository": "github:xuanlinAI/overmind",
+  "keywords": [
+    "claude-code",
+    "ai-agent",
+    "memory",
+    "cognitive-engine",
+    "knowledge-graph",
+    "self-evolving"
+  ],
   "dependencies": {
     "better-sqlite3": "^12.10.0"
   }

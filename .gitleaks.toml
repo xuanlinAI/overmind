@@ -1,0 +1,17 @@
+title = "Xuanlin Overmind v4 gitleaks config"
+
+[allowlist]
+  description = "Allowed patterns"
+  paths = [
+    '''\.bak\.v4''',
+    '''node_modules/''',
+    '''\.git/''',
+    '''\.claude/plugins/cache/''',
+  ]
+
+[[rules]]
+  id = "generic-api-key"
+  description = "Generic API Key"
+  regex = '''(?i)(api[_-]?key|secret|token|password|auth).*['":]\s*['"]?([a-zA-Z0-9_\-]{20,})'''
+  [rules.allowlist]
+    regexes = ['''YOUR_LLM_API_KEY''', '''sk-xxx''', '''\$DEEPSEEK_API_KEY''', '''\$ANTHROPIC_AUTH_TOKEN''', '''process\.env''']

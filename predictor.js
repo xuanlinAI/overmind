@@ -1,5 +1,5 @@
 // Predictive Debugging — predict failures before they happen
-const { execSync } = require('child_process')
+const { execHidden } = require('./exec_hidden')
 const path = require('path')
 const ROOT = path.dirname(__filename)
 
@@ -9,8 +9,8 @@ function predict(index, graph, cwd = process.cwd()) {
   // 1. Get current git diff
   let diff = ''
   try {
-    diff = execSync('git diff HEAD --unified=3 -- . ":(exclude)node_modules" ":(exclude).git"', {
-      encoding: 'utf-8', timeout: 5000, cwd, stdio: ['ignore', 'pipe', 'ignore']
+    diff = execHidden('git', ['diff', 'HEAD', '--unified=3', '--', '.', ':(exclude)node_modules', ':(exclude).git'], {
+      encoding: 'utf-8', timeout: 5000, cwd
     }).trim()
   } catch(e) { return null }
 

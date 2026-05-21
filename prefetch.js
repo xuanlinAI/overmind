@@ -1,4 +1,4 @@
-const { execSync } = require('child_process')
+const { execHidden } = require('./exec_hidden')
 const fs = require('fs')
 const path = require('path')
 
@@ -52,7 +52,7 @@ function prefetch(cwd = process.cwd(), topic = '') {
 
   // 2. Git diff summary
   try {
-    const diff = execSync('git diff --stat HEAD', { encoding: 'utf-8', timeout: 3000, cwd, stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    const diff = execHidden('git', ['diff', '--stat', 'HEAD'], { encoding: 'utf-8', timeout: 3000, cwd }).trim()
     if (diff) {
       hints.push({
         type: 'git_diff',
@@ -60,7 +60,7 @@ function prefetch(cwd = process.cwd(), topic = '') {
         items: [`\`\`\`\n${diff.split('\n').slice(0, 10).join('\n')}\n\`\`\``]
       })
     } else {
-      const staged = execSync('git diff --cached --stat', { encoding: 'utf-8', timeout: 3000, cwd, stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+      const staged = execHidden('git', ['diff', '--cached', '--stat'], { encoding: 'utf-8', timeout: 3000, cwd }).trim()
       if (staged) {
         hints.push({
           type: 'git_staged',

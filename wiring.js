@@ -229,11 +229,24 @@ function init() {
     } catch(e) {}
   })
 
-  // === PARALLEL BROADCAST — 18 modules with safety harness ===
+  // === CHANNEL 2: PARALLEL BROADCAST — 48 modules simultaneous fire ===
   try {
     const broadcast = require('./broadcast')
     const ROOT = require('path').dirname(__filename)
     const TIMEOUT_MS = 5000
+
+    // All 48 functional modules (excluding infra: broadcast,config,consolidate,daemon,eventbus,
+    //   extract_worker,inject,install,pipeline,quantum,stages,template,util,platform,wiring,
+    //   clarify_threshold,seed_v3)
+    const ALL_MODULES = [
+      'adapters','adaptive','anomaly','anticompact','arbitrator','briefing','budget','budget_killer',
+      'causalviz','checkpoint_writer','commit_gate','communicator','composer','compress',
+      'continuity','counterfactual','deadcode','dream','fleet','forecast','gatekeeper','graph',
+      'healer','hypothesis','index','intent','lineage','marketplace','morning','nexus',
+      'noiselearner','optimizer','orchestrator','persona','pool','predictor','prefetch','preload',
+      'privacy_filter','reason','red_team','research','shield','synthesizer',
+      'test_first_enforcer','theory_of_mind','timetravel','transfer','verifier'
+    ]
 
     broadcast.on('inject:parallel', (ctx) => {
       const idx = ctx.index || require('./index')
@@ -248,28 +261,171 @@ function init() {
         ]).catch(err => logger(`${name}: ${err.message}`))
       }
 
-      fire('persona', () => require('./persona').analyze(idx))
-      fire('anomaly', () => require('./anomaly').detect(idx, userTask))
-      fire('optimizer', () => require('./optimizer').analyze())
-      fire('composer', () => require('./composer').detectChains(idx))
-      fire('verifier', () => require('./verifier').verify(idx))
-      fire('prefetch', () => require('./prefetch').prefetch(process.cwd(), userTask))
-      fire('dream', () => require('./dream').loadDreamFindings())
-      fire('transfer', () => require('./transfer').getTransferable(userTask, 5))
-      fire('checkpoint', () => require('./checkpoint_writer').snapshot(idx, graph))
-      fire('theory_of_mind', () => require('./theory_of_mind').update(idx))
-      fire('budget_killer', () => require('./budget_killer').track(userTask.substring(0,30), null))
-      fire('deadcode', () => require('./deadcode').scan(idx))
-      fire('healer', () => require('./healer').checkWorker())
-      fire('counterfactual', () => require('./counterfactual').checkDrift(graph, idx))
-      fire('orchestrator', () => require('./orchestrator').heartbeat(process.env.OVERMIND_INSTANCE_ID||'main'))
-      fire('morning', () => require('./morning').generate())
-      fire('briefing', () => require('./briefing').generate(null,[],[]))
-      fire('budget', () => { try { require('./budget').analyze(idx) } catch(e) {} })
+      // Module-specific fire adapters — matches each module's export signature
+      const adapters = {
+        persona:       (m) => m.analyze(idx),
+        anomaly:       (m) => m.detect(idx, userTask),
+        optimizer:     (m) => m.analyze(),
+        composer:      (m) => m.detectChains(idx),
+        verifier:      (m) => m.verify(idx),
+        prefetch:      (m) => m.prefetch(process.cwd(), userTask),
+        dream:         (m) => m.loadDreamFindings(),
+        transfer:      (m) => m.getTransferable(userTask, 5),
+        checkpoint_writer: (m) => m.snapshot(idx, graph),
+        theory_of_mind:(m) => m.update(idx),
+        budget_killer: (m) => m.track(userTask.substring(0,30), null),
+        deadcode:      (m) => m.scan(idx),
+        healer:        (m) => m.checkWorker(),
+        counterfactual:(m) => m.checkDrift(graph, idx),
+        orchestrator:  (m) => { const id=m.detectInstanceId(); m.register(id); m.heartbeat(id) },
+        briefing:      (m) => m.generate(null,[],[]),
+        budget:        (m) => m.analyze(idx),
+        red_team:      (m) => m.audit ? m.audit(userTask) : null,
+        shield:        (m) => m.check ? m.check(idx) : null,
+        gatekeeper:    (m) => m.scan ? m.scan(userTask) : null,
+        forecast:      (m) => m.predict ? m.predict(graph, []) : null,
+        causalviz:     (m) => m.trace ? m.trace(graph, idx) : null,
+        arbitrator:    (m) => m.resolve ? m.resolve(idx) : null,
+        compress:      (m) => m.run ? m.run(idx) : null,
+        continuity:    (m) => m.detect ? m.detect(idx) : null,
+        timetravel:    (m) => m.snapshot ? m.snapshot(idx) : null,
+        research:      (m) => m.analyze ? m.analyze(idx) : null,
+        hypothesis:    (m) => m.generate ? m.generate(idx) : null,
+        lineage:       (m) => m.track ? m.track(idx) : null,
+        marketplace:   (m) => m.sync ? m.sync() : null,
+        intent:        (m) => m.predict ? m.predict(userTask) : null,
+        preload:       (m) => m.load ? m.load(idx) : null,
+        noiselearner:  (m) => m.learn ? m.learn(idx) : null,
+        predictor:     (m) => m.predict ? m.predict(idx, graph) : null,
+        reason:        (m) => m.analyze ? m.analyze(userTask) : null,
+        synthesizer:   (m) => m.synthesize ? m.synthesize(idx) : null,
+        adaptive:      (m) => m.adjust ? m.adjust(idx) : null,
+        anticompact:   (m) => m.check ? m.check(idx) : null,
+        commit_gate:   (m) => m.check ? m.check() : null,
+        test_first_enforcer: (m) => m.enforce ? m.enforce(idx) : null,
+        morning:       (m) => m.generate ? m.generate() : null,
+        privacy_filter:(m) => m.filter ? m.filter(userTask) : null,
+        fleet:         (m) => m.status ? m.status() : null,
+        communicator:  (m) => null, // communicator runs in serial pipeline
+        nexus:         (m) => m.link ? m.link(idx) : null,
+        pool:          (m) => m.health ? m.health() : null,
+        adapters:      (m) => m.detect ? m.detect() : null,
+        graph:         (m) => null, // graph used directly elsewhere
+        index:         (m) => null, // index used directly elsewhere
+      }
+
+      for (const name of ALL_MODULES) {
+        const adapter = adapters[name]
+        fire(name, () => {
+          if (adapter) {
+            const m = require(`./${name}`)
+            return adapter(m)
+          }
+          // Generic fallback: try init()
+          try {
+            const m = require(`./${name}`)
+            if (typeof m.init === 'function') return m.init()
+          } catch(e) {}
+        })
+      }
+
+      logger(`48 modules fired, task=${userTask.substring(0,40)}`)
     })
   } catch(e) {}
 
-  console.log('[v4] Wiring initialized — 10 flows + broadcast(21 modules) + 66 total')
+  // === CHANNEL 4: z2 HUB BROADCAST — daemon→event_queue→bus→all 48 modules ===
+  bus.on('fleet:broadcast', (data) => {
+    // Forward to all modules so each can react to peer CC activity
+    try {
+      const ROOT = require('path').dirname(__filename)
+      const logger = (msg) => { try { require('fs').appendFileSync(require('path').join(ROOT, 'worker.log'), `${new Date().toISOString()} [fleet:broadcast] ${msg}\n`) } catch(e) {} }
+      const fleetData = data.data || data
+      const instances = fleetData.instances || []
+
+      // Modules that can use fleet data for cross-CC intelligence
+      const handlers = [
+        { name: 'persona', fn: (m) => { if (m.observeFleet) m.observeFleet(instances) } },
+        { name: 'composer', fn: (m) => { if (m.detectChains) m.detectChains(require('./index')) } },
+        { name: 'transfer', fn: (m) => { if (m.getTransferable) instances.forEach(i => m.getTransferable(i.topic||'', 3)) } },
+        { name: 'anomaly', fn: (m) => { if (m.detectFleetAnomaly) m.detectFleetAnomaly(instances) } },
+        { name: 'briefing', fn: (m) => { if (m.recordFleetActivity) m.recordFleetActivity(instances) } },
+        { name: 'budget_killer', fn: (m) => { if (m.trackFleet) m.trackFleet(instances) } },
+        { name: 'counterfactual', fn: (m) => { if (m.checkFleetDrift) m.checkFleetDrift(instances) } },
+        { name: 'orchestrator', fn: (m) => { try { const id=m.detectInstanceId(); m.heartbeat(id) } catch(e) {} } },
+        { name: 'synthesizer', fn: (m) => { if (m.synthesizeFleet) m.synthesizeFleet(instances) } },
+      ]
+
+      for (const { name, fn } of handlers) {
+        try {
+          const m = require(`./${name}`)
+          fn(m)
+        } catch(e) { logger(`${name}: ${e.message}`) }
+      }
+
+      logger(`fleet:broadcast processed — ${instances.length} instances`)
+    } catch(e) {}
+  })
+
+  // === CHANNEL 6: n2终端 并联广播 — post-filter → bus → all modules ===
+  bus.on('terminal:broadcast', (data) => {
+    try {
+      const ROOT = require('path').dirname(__filename)
+      const logger = (msg) => { try { require('fs').appendFileSync(require('path').join(ROOT, 'worker.log'), `${new Date().toISOString()} [terminal] ${msg}\n`) } catch(e) {} }
+      if (!data || typeof data !== 'object') { logger('terminal:broadcast received invalid data: '+typeof data); return }
+      const filteredDoc = data.content || ''
+      const skills = data.skills || []
+      const mems = data.mems || []
+
+      // Terminal-specific handlers — modules see what user actually gets
+      const handlers = [
+        { name: 'persona', fn: (m) => { if (m.observeTerminal) m.observeTerminal(filteredDoc) } },
+        { name: 'anomaly', fn: (m) => { if (m.detectTerminalAnomaly) m.detectTerminalAnomaly(filteredDoc) } },
+        { name: 'briefing', fn: (m) => { if (m.recordTerminal) m.recordTerminal(filteredDoc, skills) } },
+        { name: 'lineage', fn: (m) => { if (m.trackTerminal) skills.forEach(s => { try { m.trackTerminal(s.name||s, filteredDoc) } catch(e) {} }) } },
+        { name: 'noiselearner', fn: (m) => { if (m.learnFromTerminal) m.learnFromTerminal(filteredDoc) } },
+        { name: 'budget_killer', fn: (m) => { if (m.trackTerminal) m.trackTerminal(filteredDoc.length, skills, mems) } },
+        { name: 'counterfactual', fn: (m) => { if (m.terminalDrift) m.terminalDrift(filteredDoc) } },
+        { name: 'composer', fn: (m) => { if (m.detectTerminalChains) m.detectTerminalChains(skills) } },
+        { name: 'orchestrator', fn: (m) => { try { m.heartbeat(m.detectInstanceId()) } catch(e) {} } },
+        { name: 'synthesizer', fn: (m) => { if (m.synthesizeTerminal) m.synthesizeTerminal(filteredDoc) } },
+        { name: 'transfer', fn: (m) => { if (m.transferTerminal) m.transferTerminal(data.userTask||'', filteredDoc) } },
+      ]
+
+      const TIMEOUT_MS = 3000
+      for (const { name, fn } of handlers) {
+        Promise.race([
+          Promise.resolve().then(() => { try { const m = require(`./${name}`); fn(m) } catch(e) {} }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS))
+        ]).catch(err => logger(`${name}: ${err.message}`))
+      }
+
+      logger(`terminal broadcast → ${handlers.length} modules, doc=${filteredDoc.length}C`)
+    } catch(e) {}
+  })
+
+  console.log('[v4] Wiring initialized — 6 channels (CH1:37-stage serial | CH2:48-module parallel | CH3:z2直连 | CH4:z2中枢→bus | CH5:n2终端8串 | CH6:n2终端11并)')
+
+  // Drain event_queue → emit latest fleet:broadcast on bus (CHANNEL 4 bridge)
+  // With dedup: skip if fleet data unchanged since last drain
+  let _lastFleetHash = ''
+  try {
+    const queued = drainInterProcess(300000)
+    let latestFleet = null, latestTs = 0
+    for (const evt of queued) {
+      if (evt.event === 'fleet:broadcast') {
+        const ts = evt.ts || 0
+        if (ts > latestTs) { latestTs = ts; latestFleet = evt }
+      }
+    }
+    if (latestFleet) {
+      const fleetData = latestFleet.data || latestFleet
+      const hash = require('crypto').createHash('md5').update(JSON.stringify(fleetData)).digest('hex')
+      if (hash !== _lastFleetHash) {
+        _lastFleetHash = hash
+        bus.emit('fleet:broadcast', fleetData)
+      }
+    }
+  } catch(e) {}
 }
 
 // Inter-process event queue — bridges worker → injector processes
@@ -304,7 +460,9 @@ function drainInterProcess(maxAge = 60000) {
 function triggerInject() {
   try {
     const { spawn } = require('child_process')
-    spawn('C:\Windows\System32\wscript.exe', [path.join(ROOT, 'spawn_relay.vbs'), path.join(ROOT, 'inject.js')], { stdio: 'ignore', detached: true, windowsHide: true }).unref()
+    const child = spawn('node', [path.join(ROOT, 'inject.js')], { stdio: 'ignore', detached: true, windowsHide: true })
+    child.on('error', () => {})
+    child.unref()
   } catch(e) {}
 }
 

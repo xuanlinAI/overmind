@@ -7,7 +7,7 @@ const API_KEY = process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN
 function callFlash(prompt) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({ model: 'deepseek-v4-flash', max_tokens: 2048, messages: [{ role: 'user', content: prompt }] })
-    const req = https.request({ hostname: 'your-llm-api.com', path: '/v1/chat/completions', method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` }, timeout: 30000 }, res => { let d = ''; res.on('data', c => d += c); res.on('end', () => { try { resolve(JSON.parse(d).choices[0].message.content) } catch(e) { reject(e) } }) })
+    const req = https.request({ hostname: 'api.deepseek.com', path: '/v1/chat/completions', method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` }, timeout: 30000 }, res => { let d = ''; res.on('data', c => d += c); res.on('end', () => { try { resolve(JSON.parse(d).choices[0].message.content) } catch(e) { reject(e) } }) })
     req.on('error', reject); req.write(body); req.end()
   })
 }

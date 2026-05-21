@@ -10,7 +10,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"<INSTALL_DIR>/inject.js\""
+            "command": "mshta vbscript:Execute(\"CreateObject(\"\"WScript.Shell\"\").Run \"\"node <INSTALL_DIR>/inject.js\"\",0,False:close\")"
           }
         ]
       }
@@ -21,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"<INSTALL_DIR>/inject.js\""
+            "command": "mshta vbscript:Execute(\"CreateObject(\"\"WScript.Shell\"\").Run \"\"node <INSTALL_DIR>/inject.js\"\",0,False:close\")"
           }
         ]
       }
@@ -32,7 +32,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"<INSTALL_DIR>/consolidate.js\""
+            "command": "mshta vbscript:Execute(\"CreateObject(\"\"WScript.Shell\"\").Run \"\"node <INSTALL_DIR>/consolidate.js\"\",0,False:close\")"
           }
         ]
       }
@@ -42,7 +42,9 @@
     "ctxproxy": {
       "type": "stdio",
       "command": "python",
-      "args": ["<INSTALL_DIR>/daemon.py"],
+      "args": [
+        "<INSTALL_DIR>/daemon.py"
+      ],
       "env": {}
     }
   }

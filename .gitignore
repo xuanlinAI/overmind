@@ -23,7 +23,7 @@ health_check.py
 .session_active
 .event_queue
 .marketplace_sources.json
-spawn_relay.vbs
+/spawn_relay.vbs
 watchdog.ps1
 .fusion_counter
 .fleet_state.json
@@ -39,3 +39,12 @@ watchdog.sh
 .hypotheses.json
 .preload_hints.json
 .persona_bias.json
+.last_update_check
+.trigger_*
+.cc-checkpoints/
+.fleet_broadcast.md
+.fleet_syntheses.json
+.overmind_env.json
+install.js.bak.*
+*.o
+reports/

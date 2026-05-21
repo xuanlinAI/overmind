@@ -18,7 +18,9 @@ function restartWorker() {
     const pidFile = path.join(ROOT, '.worker.pid')
     try { if (fs.existsSync(pidFile)) { const oldPid = parseInt(fs.readFileSync(pidFile, 'utf-8')); try { process.kill(oldPid, 'SIGTERM') } catch(e) {} } } catch(e) {}
     try { fs.unlinkSync(pidFile) } catch(e) {}
-    require('child_process').spawn('node', [path.join(ROOT, 'extract_worker.js')], { stdio: 'ignore', detached: true }).unref()
+    const child = require('child_process').spawn('node', [path.join(ROOT, 'extract_worker.js')], { stdio: 'ignore', detached: true, windowsHide: true })
+    child.on('error', () => {})
+    child.unref()
     return true
   } catch(e) { return false }
 }

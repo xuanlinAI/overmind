@@ -2,9 +2,31 @@ const path = require('path')
 const fs = require('fs')
 const https = require('https')
 
+process.on('unhandledRejection', (reason) => {
+  try { fs.appendFileSync(path.join(__dirname, 'inject.log'), `${new Date().toISOString()} unhandledRejection: ${reason?.message || reason}\n`) } catch(e) {}
+})
+
 const ROOT = path.dirname(__filename)
 const INJECTION_FILE = path.join(ROOT, 'injection.md')
 const LOCK_FILE = path.join(ROOT, '.injection.lock')
+
+// Log rotation — keep logs from growing forever
+function rotateLogs() {
+  const MAX_LINES = 5000
+  const KEEP_LINES = 2000
+  const logs = ['inject.log', 'worker.log', 'consolidate.log']
+  for (const name of logs) {
+    const fp = path.join(ROOT, name)
+    try {
+      if (!fs.existsSync(fp)) continue
+      const lines = fs.readFileSync(fp, 'utf-8').split('\n')
+      if (lines.length > MAX_LINES) {
+        const kept = lines.slice(-KEEP_LINES).join('\n')
+        fs.writeFileSync(fp, '### rotated: kept last ' + KEEP_LINES + ' of ' + lines.length + ' lines ###\n' + kept, 'utf-8')
+      }
+    } catch(e) {}
+  }
+}
 
 function writeInjection(content) {
   // Incremental: skip write if content unchanged
@@ -26,7 +48,7 @@ function writeInjection(content) {
       if (e.code === 'EEXIST') {
         const t = fs.statSync(LOCK_FILE).mtimeMs
         if (Date.now() - t > 5000) { fs.unlinkSync(LOCK_FILE) }
-        require('child_process').execSync('sleep 0.05')
+        require('child_process').execSync(process.platform==='win32'?'ping -n 1 127.0.0.1 >nul':'sleep 0.05',{stdio:'ignore'})
       } else { throw e }
     }
   }
@@ -46,7 +68,7 @@ function callDeepSeek(messages) {
       messages: messages.map(m => ({ role: m.role, content: m.content }))
     })
     const req = https.request({
-      hostname: 'your-llm-api.com', path: '/anthropic/v1/messages', method: 'POST',
+      hostname: 'api.deepseek.com', path: '/anthropic/v1/messages', method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01' }
     }, res => {
       let data = ''
@@ -76,7 +98,7 @@ function callDeepSeekFlash(prompt) {
       messages: [{ role: 'user', content: prompt }]
     })
     const req = https.request({
-      hostname: 'your-llm-api.com', path: '/v1/chat/completions', method: 'POST',
+      hostname: 'api.deepseek.com', path: '/v1/chat/completions', method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
       timeout: 120000
     }, res => {
@@ -120,10 +142,13 @@ async function selectSkillsAI(userTask, projCtx, allSkills) {
 
     const skillPrefsText = index_.formatSkillPrefsForAI()
     const catalogText = parts.join('\n\n')
-    const prompt = `${skillPrefsText ? skillPrefsText + '\n\n' : ''}Pick 0-5 skills from the catalog that best match this task.
+    const prompt = `${skillPrefsText ? skillPrefsText + '\n\n' : ''}Pick 1-5 skills from the catalog that match this task. BE AGGRESSIVE — pick at least 1.
 
-- Return 0 skills ONLY for very short daily greetings. For ANY technical task, code change, debugging, project planning, or tool usage, you MUST pick at least 1 matching skill.
-- Return ONLY a JSON array: ["skill-a","skill-b"] or []
+RULES:
+- ONLY return [] for truly trivial chat (hi/hello/thanks/ok/bye with NO technical content)
+- For ANY question about code, files, scripts, tools, debugging, config, errors, or project work: MUST pick at least 1
+- If unsure which skill fits best, pick the closest one anyway — skills can adapt
+- Return ONLY a JSON array: ["skill-a","skill-b"]
 
 Task: ${(userTask || '').substring(0, 300)}
 
@@ -143,6 +168,16 @@ ${catalogText}`
       if (m) try { names = JSON.parse(m[0]) } catch(e2) {}
     }
     if (!Array.isArray(names)) return null
+
+    // Aggressive fallback: if AI returned empty but task is non-trivial, force top-1 keyword match
+    if (names.length === 0 && candidates.length > 0) {
+      const taskLen = (userTask || '').length
+      const isGreeting = /^(hi|hello|hey|ok|bye|thanks?|好的|好|嗯|哦|谢谢|再见|行)\b/i.test(userTask || '') && taskLen < 10
+      if (!isGreeting && taskLen > 5) {
+        names = [candidates[0].name]
+        fs.appendFileSync(logFile_, `${new Date().toISOString()} selectSkillsAI: AI returned [], forcing top candidate: ${names[0]}\n`)
+      }
+    }
 
     const skills = []
     for (const name of names) {
@@ -619,6 +654,8 @@ async function main() {
   )
 
   const logFile = path.join(ROOT, 'inject.log')
+  rotateLogs() // keep log files from growing past 5000 lines
+
   // Phase 0: Quick warning check (local graph query, no API) — for lite injection
   let liteWarningText = ''
   try {
@@ -740,6 +777,36 @@ async function main() {
     if (verify && verify.flags.length > 0) shieldText = shield.formatShield(verify)
   } catch(e) {}
 
+  // ---- PIPELINE: run all serial stages for extra module output ----
+  let pipelineText = ''
+  try {
+    const pipeline = require(path.join(ROOT, 'pipeline'))
+    require(path.join(ROOT, 'stages'))
+    const pctx = { index, graph, userTask, projCtx, cwd: process.cwd(), skills, mems }
+    const presults = pipeline.runSync('inject', pctx)
+    // Collect text from stages not already handled manually
+    const handled = new Set(['persona','anomaly','optimizer','composer','verifier','prefetch','dream','research','transfer','shield','forecast'])
+    const extras = []
+    for (const [name, text] of Object.entries(presults)) {
+      if (text && typeof text === 'string' && text.length > 10 && !handled.has(name) && !name.endsWith('_error')) {
+        extras.push(text)
+      }
+    }
+    if (extras.length > 0) pipelineText = extras.join('\n')
+  } catch(e) {}
+
+  // ---- FLEET STATUS (runs before both lite and full paths) ----
+  let fleetText = ''
+  try {
+    const orchestrator = require(path.join(ROOT, 'orchestrator'))
+    const selfId = orchestrator.detectInstanceId()
+    const fleet = orchestrator.fleetStatus(selfId)
+    if (fleet.fleet_size > 1) {
+      fleetText = '## 🌐 舰队状态\n- 总实例: ' + fleet.fleet_size + ' (超脑: ' + fleet.with_overmind + ', 无超脑: ' + fleet.without_overmind + ')\n'
+        + fleet.others.map(function(o) { return '- ' + o.id + ' [' + (o.has_overmind ? '🧠' : '👁️') + '] ' + (o.status === 'active' ? '🟢' : '⚪') + ' ' + (o.working_on || '(空闲)') + ' (' + o.last_seen + ')' }).join('\n')
+    }
+  } catch(e) {}
+
   // Phase 1: Use last full injection if available, otherwise write lite
   const liteMems = keywordMems.slice(0, 5)
   let liteDoc = ''
@@ -765,6 +832,8 @@ async function main() {
   if (researchFindings) liteDoc = liteDoc.replace('## 相关记忆', researchFindings + '\n## 相关记忆')
   if (transferText) liteDoc = liteDoc.replace('## 相关记忆', transferText + '\n## 相关记忆')
   if (shieldText) liteDoc = liteDoc.replace('## 相关记忆', shieldText + '\n## 相关记忆')
+  if (fleetText) liteDoc = liteDoc.replace('## 相关记忆', fleetText + '\n## 相关记忆')
+  if (pipelineText) liteDoc = liteDoc.replace('## 相关记忆', pipelineText + '\n## 相关记忆')
   writeInjection(liteDoc)
   fs.appendFileSync(logFile, `${new Date().toISOString()} inject(lite): ${liteDoc.length} chars mem=${stats.semanticCount} worker=${workerSpawned ? 'spawned' : 'already_running'}\n`)
 
@@ -946,6 +1015,8 @@ async function main() {
     if (dreamText) fullDoc = fullDoc.replace('## 相关记忆', dreamText + '\n## 相关记忆')
     if (researchFindings) fullDoc = fullDoc.replace('## 相关记忆', researchFindings + '\n## 相关记忆')
     if (transferText) fullDoc = fullDoc.replace('## 相关记忆', transferText + '\n## 相关记忆')
+    if (fleetText) fullDoc = fullDoc.replace('## 相关记忆', fleetText + '\n## 相关记忆')
+    if (pipelineText) fullDoc = fullDoc.replace('## 相关记忆', pipelineText + '\n## 相关记忆')
 
     // ---- COMMUNICATOR: AI filter → slim injection ----
     let finalDoc = fullDoc
@@ -962,6 +1033,26 @@ async function main() {
       if (filtered && filtered.length > 100) {
         finalDoc = filtered
         fs.appendFileSync(logFile, `${new Date().toISOString()} communicator: ${fullDoc.length}C → ${filtered.length}C (${isSessionStart?'SessionStart':'UserPromptSubmit'})\n`)
+
+        // ═══ CH5 n2终端串联 + CH6 n2终端并联 ═══
+        try {
+          const graph = require(path.join(ROOT, 'graph'))
+          const termCtx = { index, graph, userTask, projCtx, skills, mems, isSessionStart, cwd: process.cwd() }
+
+          // CH5: n2终端串联 — post-filter enrichment chain
+          const termResults = communicator.terminalSerial(finalDoc, termCtx)
+          const termTexts = Object.entries(termResults)
+            .filter(([k, v]) => v && typeof v === 'string' && v.length > 10 && !k.endsWith('_error'))
+            .map(([, v]) => v)
+          if (termTexts.length > 0) { finalDoc = finalDoc + '\n\n' + termTexts.join('\n') }
+
+          // CH6: n2终端并联 — broadcast to all modules
+          const termData = communicator.terminalBroadcast(finalDoc, termCtx)
+          const bus = require(path.join(ROOT, 'eventbus'))
+          bus.emit('terminal:broadcast', termData)
+        } catch(e) {
+          fs.appendFileSync(logFile, `${new Date().toISOString()} terminal error: ${e.message}\n`)
+        }
       }
     } catch(e) {
       fs.appendFileSync(logFile, `${new Date().toISOString()} communicator error: ${e.message}, using full doc\n`)
@@ -976,7 +1067,7 @@ async function main() {
       fs.writeFileSync(FUSION_COUNT_FILE, String(count))
       if (count % 50 === 0) {
         const { spawn } = require('child_process')
-        spawn('python', ['-c', 'import daemon,json; print(json.dumps(daemon.hermes_fusion()))'], { cwd: ROOT, stdio: 'ignore', detached: true }).unref()
+        spawn('pythonw', ['-c', 'import daemon,json; print(json.dumps(daemon.hermes_fusion()))'], { cwd: ROOT, stdio: 'ignore', detached: true, windowsHide: true }).unref()
         fs.appendFileSync(logFile, `${new Date().toISOString()} hermes_fusion: triggered (${count} injections)\n`)
       }
     } catch(e) {}

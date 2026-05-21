@@ -75,4 +75,79 @@ function formatSyntheses(result) {
     ).join('\n\n') + '\n'
 }
 
-module.exports = { synthesize, formatSyntheses }
+module.exports = { synthesize, formatSyntheses, synthesizeFleet }
+
+function synthesizeFleet(instances) {
+  // Cross-CC creative collision: combine other CCs' work with local memory
+  if (!instances || instances.length < 2) return null
+
+  try {
+    const index = require('./index')
+    index.init()
+
+    const syntheses = []
+
+    // For each pair of active instances, look for cross-domain collisions
+    const active = instances.filter(i => i.status === 'active')
+    for (let i = 0; i < active.length - 1; i++) {
+      for (let j = i + 1; j < active.length; j++) {
+        const a = active[i], b = active[j]
+        const topicA = (a.topic || '').toLowerCase()
+        const topicB = (b.topic || '').toLowerCase()
+
+        // Detect domains with scoring (not first-match)
+        const domainPatterns = {
+          '逆向': [[/逆向|reverse|encrypt|解密|破解|frida|bytecode|smali|native|so文件|脱壳/i, 3]],
+          'API': [[/api|http|fetch|接口|请求|响应|rest|graphql|endpoint|路由/i, 3]],
+          '数据': [[/数据|爬虫|scrape|parse|mine|清洗|入库|数据库/i, 2]],
+          '安全': [[/审查|review|audit|安全|漏洞|security|渗透/i, 2]],
+          '配置': [[/配置|deploy|install|setup|docker|k8s|环境/i, 2]],
+        }
+
+        function domainScore(topic, patterns) {
+          let score = 0
+          for (const entry of patterns) {
+            const regex = entry[0], weight = entry[1]
+            const matches = (topic.match(new RegExp(regex.source, regex.flags)) || [])
+            score += matches.length * weight
+          }
+          return score
+        }
+
+        let bestA = null, bestB = null, bestScoreA = 0, bestScoreB = 0
+        for (const [name, patterns] of Object.entries(domainPatterns)) {
+          const sa = domainScore(topicA, patterns)
+          if (sa > bestScoreA) { bestScoreA = sa; bestA = name }
+          const sb = domainScore(topicB, patterns)
+          if (sb > bestScoreB) { bestScoreB = sb; bestB = name }
+        }
+
+        const domA = bestA && bestScoreA > 0 ? [bestA, null] : null
+        const domB = bestB && bestScoreB > 0 ? [bestB, null] : null
+
+        if (domA && domB && domA[0] !== domB[0]) {
+          // Cross-domain! Generate hypothesis
+          syntheses.push({
+            domain_a: domA[0],
+            domain_b: domB[0],
+            cc_a: a.id?.substring(0, 8) || '?',
+            cc_b: b.id?.substring(0, 8) || '?',
+            hypothesis: `[${domA[0]} ↔ ${domB[0]}] CC-${a.id?.substring(0, 8)} 在做${domA[0]}工程，CC-${b.id?.substring(0, 8)} 在做${domB[0]}相关。可能产生${domA[0]}+${domB[0]}交叉洞察。`,
+            confidence: 0.35,
+            verified: false,
+            fleet_generated: true
+          })
+        }
+      }
+    }
+
+    if (syntheses.length > 0) {
+      // Write to file for pipeline pickup
+      const fs = require('fs'), path = require('path')
+      const sf = path.join(path.dirname(__filename), '.fleet_syntheses.json')
+      fs.writeFileSync(sf, JSON.stringify({ syntheses, generated_at: new Date().toISOString() }, null, 2), 'utf-8')
+    }
+
+    return syntheses.length > 0 ? { syntheses, total: syntheses.length, fleet_generated: true } : null
+  } catch(e) { return null }
+}
