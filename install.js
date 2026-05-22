@@ -194,14 +194,14 @@ async function main() {
     const smoke = await READY.run({ timeoutMs: 60000 })
     const ccCheck = await READY.testCCCompat(snapshotHandle.files)
 
-    console.log('  管道: ' + (smoke.tests.find(t => t.name === 'Daemon Import')?.ok ? '✅' : '⚠️') + ' ' +
-      'Worker: ' + (smoke.tests.find(t => t.name === 'Worker Start')?.ok ? '✅' : '⚠️') + ' ' +
-      'MCP: ' + (smoke.tests.find(t => t.name === 'MCP Registration')?.ok ? '✅' : '⚠️') + ' ' +
-      'CLAUDEmd: ' + (smoke.tests.find(t => t.name === 'CLAUDE.md')?.ok ? '✅' : '⚠️'))
+    console.log('  管道: ' + (smoke.tests.find(t => t.name === 'Daemon Import')?.ok ? '✅' : '❌') + ' ' +
+      'Worker: ' + (smoke.tests.find(t => t.name === 'Worker Start')?.ok ? '✅' : '❌') + ' ' +
+      'MCP: ' + (smoke.tests.find(t => t.name === 'MCP Registration')?.ok ? '✅' : '⚠️ 重启后生效') + ' ' +
+      'CLAUDEmd: ' + (smoke.tests.find(t => t.name === 'CLAUDE.md')?.ok ? '✅' : '❌'))
 
     if (!smoke.ok || !ccCheck.ok) {
       console.log('')
-      console.log('  ❌ 冒烟/回归失败，正在回滚...')
+      console.log('  ❌ 关键测试失败，正在回滚...')
       if (smoke.failed.length > 0) smoke.failed.forEach(f => console.log('    - ' + f.name + ': ' + f.reason))
       if (ccCheck.regressions.length > 0) ccCheck.regressions.forEach(r => console.log('    - CC回归: ' + (r.path || r.reason)))
       await VAULT.restore(snapshotHandle.files)
