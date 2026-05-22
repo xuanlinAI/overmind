@@ -48,3 +48,4 @@ watchdog.sh
 install.js.bak.*
 *.o
 reports/
+.history_backfilled

@@ -52,3 +52,4 @@ spawn_relay.vbs
 .event_queue/
 .cc-checkpoints/
 .trigger_*
+.history_backfilled

@@ -319,6 +319,29 @@ async function main() {
   if (!transcript) { log('no transcript found'); return }
 
   log(`watching: ${transcript.name}`)
+
+  // Backfill: on first run, import existing CC history into Overmind memory
+  const BACKFILL_MARKER = path.join(ROOT, '.history_backfilled')
+  const MAX_BACKFILL_LINES = 50000 // process at most 50K lines to avoid OOM
+  if (!fs.existsSync(BACKFILL_MARKER)) {
+    log('backfill: importing existing conversation history...')
+    try {
+      const allLines = loadNewLines(transcript.path, 0) // read from beginning
+      if (allLines.lines.length > 0) {
+        const toProcess = allLines.lines.slice(-MAX_BACKFILL_LINES)
+        log(`backfill: found ${allLines.lines.length} existing lines (processing last ${toProcess.length})...`)
+        // Process in batches of 2000 to avoid API overload
+        for (let i = 0; i < toProcess.length; i += 2000) {
+          const batch = toProcess.slice(i, i + 2000)
+          await extractAndSave(batch, transcript.name)
+          log(`backfill: batch ${Math.floor(i/2000)+1}/${Math.ceil(toProcess.length/2000)} done (${i+batch.length}/${toProcess.length} lines)`)
+        }
+      }
+    } catch(e) { log(`backfill error: ${e.message}`) }
+    fs.writeFileSync(BACKFILL_MARKER, new Date().toISOString())
+    log('backfill: done — history imported to Overmind memory')
+  }
+
   let lastPos = fs.statSync(transcript.path).size
   let accumulatedLines = []
   let startTime = Date.now()
