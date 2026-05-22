@@ -2,12 +2,15 @@
 const https = require('https')
 const path = require('path')
 const ROOT = path.dirname(__filename)
-const API_KEY = process.env.OVERMIND_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || 'YOUR_LLM_API_KEY'
+const { getAPIConfig } = require('./config')
 
 function callFlash(prompt) {
   return new Promise((resolve, reject) => {
-    const body = JSON.stringify({ model: 'deepseek-v4-flash', max_tokens: 2048, messages: [{ role: 'user', content: prompt }] })
-    const req = https.request({ hostname: 'api.deepseek.com', path: '/v1/chat/completions', method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` }, timeout: 30000 }, res => { let d = ''; res.on('data', c => d += c); res.on('end', () => { try { resolve(JSON.parse(d).choices[0].message.content) } catch(e) { reject(e) } }) })
+    const cfg = getAPIConfig(true)
+    if (!cfg || !cfg.hostname) { reject(new Error('API 未配置')); return }
+
+    const body = cfg.bodyBuilder([{ role: 'user', content: prompt }])
+    const req = https.request({ hostname: cfg.hostname, path: cfg.path, method: 'POST', headers: cfg.headers, timeout: cfg.timeout }, res => { let d = ''; res.on('data', c => d += c); res.on('end', () => { try { const obj = JSON.parse(d); if (obj.error) { reject(new Error(obj.error.message || 'API error')); return } if (cfg.format === 'openai') resolve(obj.choices?.[0]?.message?.content || ''); else { const tb = obj.content?.find(c => c.type === 'text'); resolve(tb ? tb.text : (obj.content?.[0]?.text || '')) } } catch(e) { reject(e) } }) })
     req.on('error', reject); req.write(body); req.end()
   })
 }

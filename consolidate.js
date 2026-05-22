@@ -3,27 +3,27 @@ const path = require('path')
 const https = require('https')
 
 const ROOT = path.dirname(__filename)
-const API_KEY = process.env.OVERMIND_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || 'YOUR_LLM_API_KEY'
+const { getAPIConfig } = require('./config')
 
 function callAPI(messages) {
   return new Promise((resolve, reject) => {
-    const body = JSON.stringify({
-      model: 'deepseek-v4-pro[1m]',
-      max_tokens: 1024,
-      messages: messages.map(m => ({ role: m.role, content: m.content }))
-    })
+    const cfg = getAPIConfig(false) // pro model
+    if (!cfg || !cfg.hostname) { reject(new Error('API 未配置，请运行 node install.js')); return }
+
+    const body = cfg.bodyBuilder(messages)
     const req = https.request({
-      hostname: 'api.deepseek.com', path: '/anthropic/v1/messages', method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01' }
+      hostname: cfg.hostname, path: cfg.path, method: 'POST',
+      headers: cfg.headers, timeout: cfg.timeout
     }, res => {
       let data = ''
       res.on('data', c => data += c)
       res.on('end', () => {
         try {
-          const body = JSON.parse(data)
-          if (body.error) { reject(new Error(body.error.message)); return }
-          const textBlock = body.content?.find(c => c.type === 'text')
-          resolve(textBlock ? textBlock.text : (body.content?.[0]?.text || ''))
+          const obj = JSON.parse(data)
+          if (obj.error) { reject(new Error(obj.error.message)); return }
+          if (cfg.format === 'openai') { resolve(obj.choices?.[0]?.message?.content || ''); return }
+          const textBlock = obj.content?.find(c => c.type === 'text')
+          resolve(textBlock ? textBlock.text : (obj.content?.[0]?.text || ''))
         } catch(e) { reject(e) }
       })
     })

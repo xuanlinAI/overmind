@@ -20,10 +20,11 @@ function promptAPI(defaults) {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
     const config = { ...defaults }
     const steps = [
-      { key: 'baseUrl', label: 'API 端点 (OpenAI/Anthropic 兼容)', default: defaults.baseUrl },
+      { key: 'format', label: 'API 格式 (anthropic/openai)', default: defaults.format || 'anthropic' },
+      { key: 'hostname', label: 'API 域名', default: defaults.hostname },
       { key: 'apiKey', label: 'API Key', default: defaults.apiKey || 'sk-xxx' },
-      { key: 'flashModel', label: 'Flash 模型 (快速/便宜)', default: defaults.flashModel },
-      { key: 'proModel', label: 'Pro 模型 (深度分析)', default: defaults.proModel },
+      { key: 'flashModel', label: 'Flash 模型名 (快速/便宜)', default: defaults.flashModel },
+      { key: 'proModel', label: 'Pro 模型名 (深度分析)', default: defaults.proModel },
     ]
     let i = 0
     function ask() {
@@ -228,10 +229,11 @@ async function main() {
     console.log('')
 
     const apiConfig = await promptAPI({
-      baseUrl: 'https://api.deepseek.com',
+      format: 'anthropic',
+      hostname: 'api.deepseek.com',
       apiKey: process.env.OVERMIND_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || '',
-      flashModel: 'deepseek-v4-flash',
-      proModel: 'deepseek-v4-pro[1m]',
+      flashModel: '',
+      proModel: '',
     })
 
     // Write to .overmind_env.json
@@ -243,9 +245,12 @@ async function main() {
     settings.env = settings.env || {}
     if (apiConfig.apiKey && !apiConfig.apiKey.includes('YOUR_')) {
       settings.env.OVERMIND_API_KEY = apiConfig.apiKey
-      if (apiConfig.baseUrl) settings.env.OVERMIND_BASE_URL = apiConfig.baseUrl
+      settings.env.OVERMIND_API_FORMAT = apiConfig.format
+      settings.env.OVERMIND_API_HOSTNAME = apiConfig.hostname
+      settings.env.OVERMIND_FLASH_MODEL = apiConfig.flashModel
+      settings.env.OVERMIND_PRO_MODEL = apiConfig.proModel
       fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2) + '\n', 'utf-8')
-      console.log('  ✅ API key 已写入 settings.json env (CC 自动注入)')
+      console.log('  ✅ API 配置已写入 settings.json env')
     }
 
     // Summary
@@ -259,9 +264,8 @@ async function main() {
       if (envConfig.features.disabled.length > 0) console.log('  已禁用: ' + envConfig.features.disabled.map(f => f.id).join(', '))
       console.log('')
     }
-    console.log('  1. 设置 API key: export OVERMIND_API_KEY=sk-xxx (也支持 DEEPSEEK_API_KEY / ANTHROPIC_AUTH_TOKEN)')
-    console.log('  2. 重启 Claude Code')
-    console.log('  3. 输入任意内容 — 应看到超脑注入')
+    console.log('  1. 重启 Claude Code')
+    console.log('  2. 输入任意内容 — 应看到超脑注入')
     console.log('')
     console.log('  GitHub: https://github.com/xuanlinAI/overmind')
 

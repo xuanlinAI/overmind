@@ -21,12 +21,17 @@ const DEFAULT = {
     dream_min_interval_hours: 8,
   },
   api: {
+    // 用户安装时填写 — install.js 交互式收集
+    format: 'anthropic',           // 'anthropic' | 'openai'
+    hostname: '',                   // 用户填的 API 域名
+    flash_model: '',                // 用户填的 flash 模型名
+    pro_model: '',                  // 用户填的 pro 模型名
     flash_timeout_ms: 120000,
     pro_timeout_ms: 300000,
-    flash_model: 'deepseek-v4-flash',
-    pro_model: 'deepseek-v4-pro[1m]',
     flash_max_tokens: 16384,
     pro_max_tokens: 16384,
+    anthropic_path: '/anthropic/v1/messages',
+    openai_path: '/v1/chat/completions',
   },
   injection: {
     lite_memory_count: 5,
@@ -51,7 +56,7 @@ const DEFAULT = {
 function load(configPath) {
   let cfg = JSON.parse(JSON.stringify(DEFAULT))
   try {
-    const fp = configPath || path.join(path.dirname(__filename), '.overmind_config.json')
+    const fp = configPath || path.join(path.dirname(__filename), '.overmind_env.json')
     if (fs.existsSync(fp)) {
       const user = JSON.parse(fs.readFileSync(fp, 'utf-8'))
       cfg = deepMerge(cfg, user)
@@ -82,4 +87,42 @@ function deepMerge(base, override) {
   return result
 }
 
-module.exports = { load, DEFAULT }
+// 读配置并构建 API 请求参数 — 避免各模块硬编码
+function getAPIConfig(useFlash = true) {
+  const cfg = load()
+  const api = cfg.api || DEFAULT.api
+  // install.js 写入 camelCase，兼容两种键名
+  const flashModel = api.flashModel || api.flash_model || 'deepseek-chat'
+  const proModel = api.proModel || api.pro_model || 'deepseek-chat'
+  const model = useFlash ? flashModel : proModel
+  const apiKey = process.env.OVERMIND_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || ''
+  if (!model || !apiKey) throw new Error('API 未配置: 缺少模型名或密钥。请运行 node install.js')
+  const timeout = useFlash ? api.flash_timeout_ms : api.pro_timeout_ms
+  const maxTokens = useFlash ? api.flash_max_tokens : api.pro_max_tokens
+  const format = api.format || process.env.OVERMIND_API_FORMAT || 'anthropic'
+  const hostname = api.hostname || process.env.OVERMIND_API_HOSTNAME || 'api.deepseek.com'
+
+  if (format === 'openai') {
+    return {
+      hostname, path: api.openai_path || '/v1/chat/completions', method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      bodyBuilder: (messages) => JSON.stringify({
+        model, max_tokens: maxTokens,
+        messages: messages.map(m => ({ role: m.role, content: m.content }))
+      }),
+      model, timeout, format
+    }
+  }
+
+  return {
+    hostname, path: api.anthropic_path || '/anthropic/v1/messages', method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    bodyBuilder: (messages) => JSON.stringify({
+      model, max_tokens: maxTokens,
+      messages: messages.map(m => ({ role: m.role, content: m.content }))
+    }),
+    model, timeout, format
+  }
+}
+
+module.exports = { load, DEFAULT, getAPIConfig }

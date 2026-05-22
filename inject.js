@@ -56,31 +56,32 @@ function writeInjection(content) {
 const EPISODIC_DIR = path.join(ROOT, 'memory', 'episodic')
 const { detectTranscriptDir } = require(path.join(ROOT, 'util'))
 const TRANSCRIPT_DIR = detectTranscriptDir() || path.join(process.env.HOME || process.env.USERPROFILE, '.claude', 'projects', 'D--claude')
-const API_KEY = process.env.OVERMIND_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || 'YOUR_LLM_API_KEY'
+const { load: loadConfig, getAPIConfig } = require('./config')
 
 if (!fs.existsSync(EPISODIC_DIR)) fs.mkdirSync(EPISODIC_DIR, { recursive: true })
 
-function callDeepSeek(messages) {
+function callLLM(messages, useFlash = false) {
   return new Promise((resolve, reject) => {
-    const body = JSON.stringify({
-      model: 'deepseek-v4-pro[1m]',
-      max_tokens: 16384,
-      messages: messages.map(m => ({ role: m.role, content: m.content }))
-    })
+    const cfg = getAPIConfig(useFlash)
+    if (!cfg || !cfg.hostname) { reject(new Error('API 未配置，请运行 node install.js')); return }
+
+    const body = cfg.bodyBuilder(messages)
     const req = https.request({
-      hostname: 'api.deepseek.com', path: '/anthropic/v1/messages', method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01' }
+      hostname: cfg.hostname, path: cfg.path, method: 'POST',
+      headers: cfg.headers, timeout: cfg.timeout
     }, res => {
       let data = ''
       res.on('data', c => data += c)
       res.on('end', () => {
         try {
-          const body = JSON.parse(data)
-          if (body.error) { reject(new Error(body.error.message || 'API error')); return }
-          const textBlock = body.content?.find(c => c.type === 'text')
-          resolve(textBlock ? textBlock.text : (body.content?.[0]?.text || ''))
-        }
-        catch(e) { reject(e) }
+          const obj = JSON.parse(data)
+          if (obj.error) { reject(new Error(obj.error.message || 'API error')); return }
+          // OpenAI 格式
+          if (cfg.format === 'openai') { resolve(obj.choices?.[0]?.message?.content || ''); return }
+          // Anthropic 格式
+          const textBlock = obj.content?.find(c => c.type === 'text')
+          resolve(textBlock ? textBlock.text : (obj.content?.[0]?.text || ''))
+        } catch(e) { reject(e) }
       })
     })
     req.on('error', reject)
@@ -89,31 +90,8 @@ function callDeepSeek(messages) {
   })
 }
 
-// Fast/cheap API for memory selection — flash model, no thinking
-function callDeepSeekFlash(prompt) {
-  return new Promise((resolve, reject) => {
-    const body = JSON.stringify({
-      model: 'deepseek-v4-flash',
-      max_tokens: 16384,
-      messages: [{ role: 'user', content: prompt }]
-    })
-    const req = https.request({
-      hostname: 'api.deepseek.com', path: '/v1/chat/completions', method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
-      timeout: 120000
-    }, res => {
-      let data = ''
-      res.on('data', c => data += c)
-      res.on('end', () => {
-        try { resolve(JSON.parse(data).choices[0].message.content) }
-        catch(e) { reject(e) }
-      })
-    })
-    req.on('error', reject)
-    req.write(body)
-    req.end()
-  })
-}
+function callDeepSeek(messages) { return callLLM(messages, false) }
+function callDeepSeekFlash(prompt) { return callLLM([{ role: 'user', content: prompt }], true) }
 
 // AI-driven skill selection — keyword pre-filter → AI picks best
 async function selectSkillsAI(userTask, projCtx, allSkills) {
