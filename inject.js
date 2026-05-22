@@ -488,10 +488,6 @@ function buildInjection(ctx) {
   const warningSection = ctx.warningText || ''
 
   const skills = ctx.skills || []
-  const skillText = skills.slice(0, 3).map(s => {
-    const core = getSkillCore(s)
-    return `### ${s.name}\n${core || s.description?.substring(0, 200)}`
-  }).join('\n\n')
 
   const prevEpisode = loadPreviousEpisode()
   const continuityText = prevEpisode ? `\n## 上次对话\n${prevEpisode.substring(0, 300)}` : ''
@@ -500,16 +496,35 @@ function buildInjection(ctx) {
   const recentText = recentContext ? `\n## 最近消息\n${recentContext}` : ''
 
   const hasSkills = skills.length > 0
-  const mandatory = hasSkills
-    ? `## 直接执行以下指令（已注入完整内容，无需查文件）\n\n${skillText}`
-    : ''
 
-  const statusLine = ctx.skillStatus || (hasSkills ? `已注入 ${skills.length} 个技能` : '未注入技能')
+  // Build SKILL MANDATE at top — hard instruction, not buried mid-doc
+  let skillMandate = ''
+  if (hasSkills) {
+    const skillLines = skills.slice(0, 3).map(s => {
+      const core = getSkillCore(s)
+      const desc = core || s.description?.substring(0, 200) || ''
+      const args = s.recommended_args || s.args || ''
+      const invokeCall = args
+        ? `Skill("${s.name}", {args: "${args}"})`
+        : `Skill("${s.name}")`
+      return `- **${s.name}**: ${desc}\n  参数: ${args || '(无)'}\n  立即执行: ${invokeCall}`
+    }).join('\n\n')
+
+    skillMandate = `!!! SKILL MANDATE !!!
+本会话必须用 Skill 工具调用以下技能。禁止手动替代。禁止跳过。
+未完成 → 下轮注入加倍提醒。
+${skillLines}
+!!! END MANDATE !!!`
+  }
+
+  const statusLine = ctx.skillStatus || (hasSkills ? `已注入 ${skills.length} 个` : '未注入技能')
 
   return `# Xuanlin Overmind
 
 ## 当前任务
 ${ctx.userTask || '(未检测到)'}
+
+${skillMandate}
 
 ## 项目上下文
 ${ctx.projCtx}
@@ -521,8 +536,6 @@ ${recentText}
 ${planText}
 
 ${warningSection}
-
-${mandatory}
 
 ${progressText}
 
