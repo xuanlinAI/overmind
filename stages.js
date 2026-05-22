@@ -128,6 +128,8 @@ pipeline.register({ name: 'checkpoint', phase: 'inject', priority: 55, run: (ctx
 pipeline.register({ name: 'tdd_enforcer', phase: 'inject', priority: 56, run: (ctx) => { return null } }) // triggered per-file, not per-injection
 pipeline.register({ name: 'theory_of_mind', phase: 'inject', priority: 65, cacheKey:'tom', run: (ctx) => { try { const t=require('./theory_of_mind'); const m=t.load(); const w=t.predictErrors(m,ctx.userTask||''); return w.length?t.format(w):null } catch(e){return null} } })
 pipeline.register({ name: 'budget_killer', phase: 'inject', priority: 85, run: (ctx) => { try { const b=require('./budget_killer'); const r=b.track(ctx.userTask?.substring(0,30)||'main',null); return r?b.format(r):null } catch(e){return null} } })
+pipeline.register({ name: 'fleet_reporter', phase: 'inject', priority: 103, run: (ctx) => { try { const m=require('./fleet_reporter'); return m.report() } catch(e){return null} } })
+
 pipeline.register({ name: 'briefing', phase: 'inject', priority: 105, run: (ctx) => { try { const b=require('./briefing'); return b.format(b.generate(null,[],[])) } catch(e){return null} } })
 pipeline.register({ name: 'deadcode', phase: 'inject', priority: 120, cacheKey:'dead', run: (ctx) => { try { const d=require('./deadcode'); const r=d.scan(ctx.index); return r&&r.zombies>0?d.format(r):null } catch(e){return null} } })
 

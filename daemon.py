@@ -754,7 +754,7 @@ def auto_promote():
                 (key, content, content, tags or ''))
             try:
                 seg = ' '.join(jieba.cut(content))
-                db.execute("INSERT OR IGNORE INTO procedural_fts(name, description, trigger_patterns) VALUES (?,?,?)", (key, seg, tags or ''))
+                db.execute("INSERT OR IGNORE INTO procedural_fts(name, description, steps, trigger_patterns) VALUES (?,?,?,?)", (key, content, seg, tags or ''))
             except Exception: pass
         except Exception: pass
         db.execute("UPDATE semantic SET promotion_count = 1, confidence = MIN(1.0, ?), procedural_source = ? WHERE key = ?", (ac * 0.1 + conf, key, key))
@@ -918,7 +918,7 @@ def evolve_with_ai():
         try:
             steps_text = '\n'.join(ss)
             db.execute("INSERT OR REPLACE INTO procedural (name, description, steps, trigger_patterns) VALUES (?,?,?,?)", (n, d or '', steps_text, t))
-            try: db.execute("INSERT OR REPLACE INTO procedural_fts(name, description, trigger_patterns) VALUES (?,?,?)", (n, ' '.join(jieba.cut(d or '')), t))
+            try: db.execute("INSERT OR REPLACE INTO procedural_fts(name, description, steps, trigger_patterns) VALUES (?,?,?,?)", (n, ' '.join(jieba.cut(d or '')), ss, t))
             except Exception: pass
             db.execute("INSERT INTO evolution_log (session_id, action, detail) VALUES ('hermes', 'ai_workflow', ?)", (json.dumps({'name': n, 'steps': len(ss)}),))
             workflows += 1

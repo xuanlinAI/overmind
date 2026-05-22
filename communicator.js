@@ -115,6 +115,9 @@ function terminalSerial(filteredDoc, ctx = {}) {
     { name: 'budget', fn: () => {
       try { const m = require('./budget'); const r = m.analyze(ctx.index || require('./index')); return r ? `\n## 📊 终端预算\n记忆预算已更新` : null } catch(e) { return null }
     }},
+    { name: 'fleet_terminal', fn: () => {
+      try { const m=require('./fleet_reporter'); return m.summary() } catch(e) { return null }
+    }},
     { name: 'briefing', fn: () => {
       try { const m = require('./briefing'); return `\n## 📋 终端简报\n当前已记录` } catch(e) { return null }
     }},

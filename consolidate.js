@@ -64,6 +64,18 @@ ${context.substring(0, 2000)}`
         }
         const epFile = path.join(ROOT, 'memory', 'episodic', `${sessionId}.json`)
         fs.writeFileSync(epFile, JSON.stringify(epData, null, 2), 'utf-8')
+
+        // Also write to DB for MCP search
+        try {
+          const ctx = context ? context.substring(0, 200) : ''
+          const taskMatch = ctx.match(/当前任务\s*\n(.+)/)
+          const task = taskMatch ? taskMatch[1].substring(0, 200) : ''
+          const db = require('better-sqlite3')(path.join(ROOT, 'memory.db'))
+          db.prepare(`INSERT INTO episodic (session_id, summary, task, message_count, transcript_path, project_name, created_at) VALUES (?,?,?,?,?,?,datetime('now'))`).run(
+            sessionId, epSummary.substring(0, 500), task, stats.semanticCount || 0, '', '')
+          db.close()
+        } catch(e) {}
+
         process.stdout.write(`[overmind] episode saved: ${epSummary.substring(0, 80)}...\n`)
       }
     } catch(e) {

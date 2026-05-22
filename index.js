@@ -213,7 +213,12 @@ function saveProcedural(name, description, steps, triggers = '') {
 function searchProcedural(query, limit = 5) {
   const q = query.replace(/[^\w\s一-鿿]/g, ' ').split(/\s+/).filter(w => w.length > 0).join(' OR ')
   if (!q) return []
-  return db.prepare(`SELECT rowid as id, name, description, trigger_patterns, steps, rank FROM procedural_fts WHERE procedural_fts MATCH ? ORDER BY rank LIMIT ?`).all(q, limit)
+  try {
+    return db.prepare(`SELECT f.rowid as id, p.name, p.description, p.trigger_patterns, p.steps, rank FROM procedural_fts f JOIN procedural p ON p.name = f.name WHERE procedural_fts MATCH ? ORDER BY rank LIMIT ?`).all(q, limit)
+  } catch(e) {
+    // Fallback: FTS may be out of sync, try direct query
+    return db.prepare(`SELECT id, name, description, trigger_patterns, steps FROM procedural WHERE (description LIKE ? OR name LIKE ?) AND status='active' LIMIT ?`).all('%'+query.split(/\s+/)[0]+'%', '%'+query.split(/\s+/)[0]+'%', limit)
+  }
 }
 
 // ---- EPISODIC ----
