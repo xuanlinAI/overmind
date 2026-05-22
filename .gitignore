@@ -49,4 +49,3 @@ install.js.bak.*
 *.o
 reports/
 .history_backfilled
-.current_instance

@@ -405,15 +405,6 @@ function init() {
 
   console.log('[v4] Wiring initialized — 6 channels (CH1:37-stage serial | CH2:48-module parallel | CH3:z2直连 | CH4:z2中枢→bus | CH5:n2终端8串 | CH6:n2终端11并)')
 
-  // Write self session ID for daemon fleet broadcast self-identification
-  try {
-    const orch = require('./orchestrator')
-    const selfId = orch.detectInstanceId()
-    if (selfId && !selfId.includes('fallback')) {
-      require('fs').writeFileSync(require('path').join(ROOT, '.current_instance'), selfId)
-    }
-  } catch(e) {}
-
   // Drain event_queue → emit latest fleet:broadcast on bus (CHANNEL 4 bridge)
   // With dedup: skip if fleet data unchanged since last drain
   let _lastFleetHash = ''
