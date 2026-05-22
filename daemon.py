@@ -1206,10 +1206,13 @@ class FleetWatcher:
         lines = ['📡 舰队广播 z2']
         lines.append(f'> {len(sessions)} 个实例 · {time.strftime("%H:%M:%S")} 刷新\n')
 
+        # Detect self: which CC launched this daemon?
         our_session = None
+        current_file = os.path.join(ROOT, '.current_instance')
         try:
-            with open(os.path.join(CC_SESSIONS_DIR, [f for f in os.listdir(CC_SESSIONS_DIR) if f.endswith('.json')][0]), 'r') as f:
-                pass
+            if os.path.exists(current_file):
+                with open(current_file, 'r', encoding='utf-8') as f:
+                    our_session = f.read().strip()
         except Exception:
             pass
 
@@ -1217,11 +1220,13 @@ class FleetWatcher:
             sid = s['id'][:8]
             om = overmind.get(s['id'])
             has_om = bool(om)
+            is_self = our_session and s['id'] == our_session
             status_icon = '🟢' if s.get('recently_active') else '⚪'
             om_icon = '🧠' if has_om else '👁️'
+            self_tag = ' 🏠当前' if is_self else ''
             topic = (s.get('topic') or '(idle)')[:80]
 
-            lines.append(f'### {sid} [{om_icon}] {status_icon} {topic}')
+            lines.append(f'### {sid} [{om_icon}] {status_icon} {topic}{self_tag}')
 
             qa = s.get('qa_pairs', [])
             if qa:
