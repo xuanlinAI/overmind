@@ -217,6 +217,53 @@ async function main() {
       console.log('  ✅ Worker 已启动')
     } catch (e) { console.log('  ⚠️ Worker: ' + e.message); }
 
+    // Start Daemon — 舰队广播 + 触发器扫描都靠它
+    try {
+      const pyExe = PLATFORM.isWindows
+        ? (require('./.overmind/installer/lib/platform').findExecutable('pythonw') || require('./.overmind/installer/lib/platform').findExecutable('python') || 'python')
+        : 'python3'
+      const d = spawn(pyExe, [path.join(ROOT, 'daemon.py')], { stdio: 'ignore', detached: true, windowsHide: PLATFORM.isWindows })
+      d.on('error', () => {})
+      d.unref()
+      console.log('  ✅ Daemon 已启动')
+    } catch (e) { console.log('  ⚠️ Daemon: ' + e.message); }
+
+    // ═══════════════════════════════════════
+    // Seed files — 防止 CLAUDE.md !include 因文件不存在报错
+    // ═══════════════════════════════════════
+    const seedInjectionPath = path.join(ROOT, 'injection.md')
+    const seedFleetPath = path.join(ROOT, '.fleet_broadcast.md')
+    const seedInjection = `# Xuanlin Overmind
+
+## 当前任务
+(等待首次对话触发注入)
+
+## 项目上下文
+玄霖超脑 v4 已安装 · 等待 CC 触发首次注入
+
+## 相关记忆
+- 暂无相关记忆
+
+## 技能注入
+未注入技能
+
+> 遇到技术问题先用 MCP search_memory 查记忆，再回答。`
+    const seedFleet = `📡 舰队广播 z2
+> 1 个实例 · 刚安装
+> 等待 daemon 启动后自动更新`
+    try {
+      if (!fs.existsSync(seedInjectionPath)) {
+        fs.writeFileSync(seedInjectionPath, seedInjection, 'utf-8')
+        console.log('  ✅ injection.md 种子已生成')
+      }
+    } catch (e) { console.log('  ⚠️ injection.md: ' + e.message) }
+    try {
+      if (!fs.existsSync(seedFleetPath)) {
+        fs.writeFileSync(seedFleetPath, seedFleet, 'utf-8')
+        console.log('  ✅ .fleet_broadcast.md 种子已生成')
+      }
+    } catch (e) { console.log('  ⚠️ .fleet_broadcast.md: ' + e.message) }
+
     // ═══════════════════════════════════════════════════════
     // API Configuration — interactive prompt
     // ═══════════════════════════════════════════════════════
