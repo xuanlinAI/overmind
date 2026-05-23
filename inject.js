@@ -130,7 +130,7 @@ async function selectSkillsAI(userTask, projCtx, allSkills) {
 RULES:
 - ONLY return [] for truly trivial chat (hi/hello/thanks/ok/bye with NO technical content)
 - For ANY question about code, files, scripts, tools, debugging, config, errors, or project work: MUST pick at least 1${isComprehensive ? ' (3 for comprehensive tasks)' : ''}
-- If unsure which skill fits best, pick the closest one anyway — skills can adapt${isComprehensive ? '\\n- This is a COMPREHENSIVE task — pick skills from DIFFERENT domains to cover all aspects' : ''}
+- If unsure which skill fits best, pick the closest one anyway — skills can adapt${isComprehensive ? '\n- This is a COMPREHENSIVE task — pick skills from DIFFERENT domains to cover all aspects' : ''}
 - Return ONLY a JSON array: ["skill-a","skill-b"]
 
 Task: ${(userTask || '').substring(0, 300)}
@@ -589,6 +589,7 @@ async function main() {
     if (prediction && prediction.confidence >= 0.4) {
       try {
         const preloader = require(path.join(ROOT, 'preload'))
+        const graph = require(path.join(ROOT, 'graph'))
         const hints = preloader.preload(prediction, index, graph, intent)
         if (hints && hints.preload) preloadText = preloader.formatPreload(hints)
       } catch(e) {}
@@ -606,15 +607,7 @@ async function main() {
     }
   } catch(e) {}
 
-  // ---- BROADCAST: parallel fan-out ---
-  try {
-    require(path.join(ROOT, 'broadcast')).emit('inject:parallel', {
-      userTask, projCtx, stats, memKeys: keywordMems.map(m => m.key),
-      skills: skills.map(s => s.name), prediction
-    })
-  } catch(e) {}
-
-  // ---- MORNING BRIEF ----
+  // BROADCAST moved to after variable declarations (line ~860)
   let morningText = ''
   try {
     const morning = require(path.join(ROOT, 'morning'))
@@ -797,6 +790,7 @@ async function main() {
   try {
     const pipeline = require(path.join(ROOT, 'pipeline'))
     require(path.join(ROOT, 'stages'))
+    const graph = require(path.join(ROOT, 'graph'))
     const pctx = { index, graph, userTask, projCtx, cwd: process.cwd(), skills, mems }
     const presults = pipeline.runSync('inject', pctx)
     // Collect text from stages not already handled manually
@@ -857,6 +851,14 @@ async function main() {
   let skills = [], skillMethod = 'none', aiSaidEmpty = false
   let mems = liteMems, memMethod = 'keyword'
   let taskPlan = null
+
+  // ---- BROADCAST: parallel fan-out (all vars now declared) ----
+  try {
+    require(path.join(ROOT, 'broadcast')).emit('inject:parallel', {
+      userTask, projCtx, stats, memKeys: keywordMems.map(m => m.key),
+      skills: skills.map(s => s.name), prediction
+    })
+  } catch(e) {}
 
   // Phase 2: Run AI skill + memory + decomposition in PARALLEL
 

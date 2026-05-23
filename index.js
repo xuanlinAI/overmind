@@ -311,6 +311,7 @@ function indexAllSkills(skillsDir) {
 }
 
 function searchSkills(query, limit = 3) {
+  if (!db) init()
   const cjkRe = /[一-鿿㐀-䶿]/
   const rows = db.prepare('SELECT * FROM skill_index').all()
 

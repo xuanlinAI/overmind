@@ -141,7 +141,7 @@ pipeline.register({ name: 'shield', phase: 'inject', priority: 8, run: (ctx) => 
 
 pipeline.register({ name: 'red_team', phase: 'inject', priority: 15, run: (ctx) => { try { const m=require('./red_team'); const r=m.attack(ctx.userTask||''); return (r&&Object.keys(r).length>0) ? m.format(r) : null } catch(e){return null} } })
 
-pipeline.register({ name: 'forecast', phase: 'inject', priority: 25, run: (ctx) => { try { const m=require('./forecast'); const fc=m.predict(ctx.graph||require('./graph'), []); return fc?.predictions?.length>0 ? m.formatForecast(fc) : null } catch(e){return null} } })
+pipeline.register({ name: 'forecast', phase: 'inject', priority: 25, run: (ctx) => { try { const m=require('./forecast'); const keys = (ctx.mems || []).map(m => m.key).filter(Boolean); const fc=m.predict(ctx.graph||require('./graph'), keys); return fc?.predictions?.length>0 ? m.formatForecast(fc) : null } catch(e){return null} } })
 
 pipeline.register({ name: 'continuity', phase: 'inject', priority: 35, cacheKey:'cont', run: (ctx) => { try { const m=require('./continuity'); const r=m.detect(ctx.index); return (r&&r.is_continuation) ? m.formatContinuity(r) : null } catch(e){return null} } })
 
@@ -159,7 +159,7 @@ pipeline.register({ name: 'lineage', phase: 'inject', priority: 92, run: (ctx) =
 
 pipeline.register({ name: 'budget_pipe', phase: 'inject', priority: 97, run: (ctx) => { try { const m=require('./budget'); const r=m.analyze(ctx.index); return r ? m.formatBudget(r) : null } catch(e){return null} } })
 
-pipeline.register({ name: 'preload_pipe', phase: 'inject', priority: 102, run: (ctx) => { try { const m=require('./preload'); const r=m.preload(process.cwd(), ctx.userTask||''); return (r&&r.preload) ? m.formatPreload(r) : null } catch(e){return null} } })
+pipeline.register({ name: 'preload_pipe', phase: 'inject', priority: 102, run: (ctx) => { try { const m=require('./preload'); const prediction = ctx.prediction || {}; const r=m.preload(prediction, ctx.index, ctx.graph||require('./graph'), ctx.intent); return (r&&r.preload) ? m.formatPreload(r) : null } catch(e){return null} } })
 
 pipeline.register({ name: 'causalviz', phase: 'inject', priority: 108, cacheKey:'causal', run: (ctx) => { try { const m=require('./causalviz'); const g=ctx.graph||require('./graph'); const idx=ctx.index; const keys=idx.getAllMemoryKeys ? idx.getAllMemoryKeys().slice(0,10).map(k=>k.key) : []; const r=m.visualize(g, keys); return r ? m.formatCausal(r) : null } catch(e){return null} } })
 
