@@ -8,13 +8,13 @@
     },
     "3hop": {
       "accuracy": "100.0%",
-      "avg_ms": "0.45",
+      "avg_ms": "0.60",
       "p95_ms": "1.00"
     },
     "5hop": {
       "accuracy": "100.0%",
-      "avg_ms": "2.95",
-      "p95_ms": "4.00"
+      "avg_ms": "3.85",
+      "p95_ms": "5.00"
     }
   },
   "degradation_curve": {

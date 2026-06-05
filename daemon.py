@@ -360,7 +360,7 @@ def search_hybrid(query, limit=10):
 
 def call_ai_api(messages, max_tokens=16384, timeout=120):
     import urllib.request
-    API_KEY = os.environ.get('OVERMIND_API_KEY') or os.environ.get('DEEPSEEK_API_KEY') or os.environ.get('ANTHROPIC_AUTH_TOKEN') or 'YOUR_LLM_API_KEY'
+    API_KEY = os.environ.get('DEEPSEEK_API_KEY') or os.environ.get('ANTHROPIC_AUTH_TOKEN') or 'YOUR_LLM_API_KEY'
     body = json.dumps({
         'model': 'deepseek-v4-flash',
         'max_tokens': max_tokens,
@@ -754,7 +754,7 @@ def auto_promote():
                 (key, content, content, tags or ''))
             try:
                 seg = ' '.join(jieba.cut(content))
-                db.execute("INSERT OR IGNORE INTO procedural_fts(name, description, steps, trigger_patterns) VALUES (?,?,?,?)", (key, content, seg, tags or ''))
+                db.execute("INSERT OR IGNORE INTO procedural_fts(name, description, trigger_patterns) VALUES (?,?,?)", (key, seg, tags or ''))
             except Exception: pass
         except Exception: pass
         db.execute("UPDATE semantic SET promotion_count = 1, confidence = MIN(1.0, ?), procedural_source = ? WHERE key = ?", (ac * 0.1 + conf, key, key))
@@ -766,7 +766,7 @@ def auto_promote():
 def analyze_skills_with_pro():
     """Offline: pro reads all SKILL.md files, generates matching_tags for each"""
     import urllib.request
-    API_KEY = os.environ.get('OVERMIND_API_KEY') or os.environ.get('DEEPSEEK_API_KEY') or os.environ.get('ANTHROPIC_AUTH_TOKEN') or 'YOUR_LLM_API_KEY'
+    API_KEY = os.environ.get('DEEPSEEK_API_KEY') or os.environ.get('ANTHROPIC_AUTH_TOKEN') or 'YOUR_LLM_API_KEY'
 
     # Add matching_tags column if needed
     try: db.execute('ALTER TABLE skill_index ADD COLUMN matching_tags TEXT DEFAULT \"\"')
@@ -835,7 +835,7 @@ Skills:
 def evolve_with_ai():
     """AI-driven evolution: merge similar, detect contradictions, create structured workflows"""
     import urllib.request
-    API_KEY = os.environ.get('OVERMIND_API_KEY') or os.environ.get('DEEPSEEK_API_KEY') or os.environ.get('ANTHROPIC_AUTH_TOKEN') or 'YOUR_LLM_API_KEY'
+    API_KEY = os.environ.get('DEEPSEEK_API_KEY') or os.environ.get('ANTHROPIC_AUTH_TOKEN') or 'YOUR_LLM_API_KEY'
 
     # Get top 30 high-value memories for AI analysis
     rows = db.execute("""SELECT key, content, tags, COALESCE(confidence,0.5) as conf, access_count
@@ -918,7 +918,7 @@ def evolve_with_ai():
         try:
             steps_text = '\n'.join(ss)
             db.execute("INSERT OR REPLACE INTO procedural (name, description, steps, trigger_patterns) VALUES (?,?,?,?)", (n, d or '', steps_text, t))
-            try: db.execute("INSERT OR REPLACE INTO procedural_fts(name, description, steps, trigger_patterns) VALUES (?,?,?,?)", (n, ' '.join(jieba.cut(d or '')), ss, t))
+            try: db.execute("INSERT OR REPLACE INTO procedural_fts(name, description, trigger_patterns) VALUES (?,?,?)", (n, ' '.join(jieba.cut(d or '')), t))
             except Exception: pass
             db.execute("INSERT INTO evolution_log (session_id, action, detail) VALUES ('hermes', 'ai_workflow', ?)", (json.dumps({'name': n, 'steps': len(ss)}),))
             workflows += 1

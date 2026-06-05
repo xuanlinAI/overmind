@@ -7,16 +7,16 @@
   },
   "fts5": {
     "recall": "0.0%",
-    "latency_ms": "0.02",
+    "latency_ms": "0.00",
     "p95_ms": "0.00"
   },
   "keyword_ranking": {
-    "recall": "90.0%",
+    "recall": "88.0%",
     "latency_ms": "0.10",
     "p95_ms": "1.00"
   },
   "headline": {
-    "recall_500": "90.0%",
+    "recall_500": "88.0%",
     "write_throughput": "250000 ops/sec",
     "verdict": "PASS"
   }

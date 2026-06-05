@@ -2,16 +2,14 @@ const path = require('path')
 const fs = require('fs')
 const https = require('https')
 const ROOT = path.dirname(__filename)
+
 const { getAPIConfig } = require('./config')
-const DREAM_FILE = path.join(ROOT, '.dream_findings.json')
 
-function callFlashAPI(messages) {
+function callLLM(messages, useFlash = true) {
   return new Promise((resolve, reject) => {
-    const cfg = getAPIConfig(true)
-    if (!cfg || !cfg.hostname) { reject(new Error('API 未配置')); return }
-
-    const body = cfg.bodyBuilder(messages)
-    const req = https.request({
+    let cfg; try { cfg = getAPIConfig(useFlash) } catch(e) { reject(e); return }
+    const body = cfg.bodyBuilder(Array.isArray(messages) ? messages : [{ role: 'user', content: messages }])
+    const req = require('https').request({
       hostname: cfg.hostname, path: cfg.path, method: 'POST',
       headers: cfg.headers, timeout: cfg.timeout
     }, res => {
@@ -33,25 +31,53 @@ function callFlashAPI(messages) {
   })
 }
 
-function callProAPI(messages) {
-  return new Promise((resolve, reject) => {
-    const cfg = getAPIConfig(false)
-    if (!cfg || !cfg.hostname) { reject(new Error('API 未配置')); return }
+const DREAM_FILE = path.join(ROOT, '.dream_findings.json')
 
-    const body = cfg.bodyBuilder(messages)
+function callLLM(messages) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      model: 'deepseek-v4-flash',
+      max_tokens: 8192,
+      messages: messages.map(m => ({ role: m.role, content: m.content }))
+    })
     const req = https.request({
-      hostname: cfg.hostname, path: cfg.path, method: 'POST',
-      headers: cfg.headers, timeout: cfg.timeout
+      hostname: 'api.deepseek.com', path: '/v1/chat/completions', method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+      timeout: 120000
+    }, res => {
+      let data = ''
+      res.on('data', c => data += c)
+      res.on('end', () => {
+        try { resolve(JSON.parse(data).choices[0].message.content) }
+        catch(e) { reject(e) }
+      })
+    })
+    req.on('error', reject)
+    req.write(body)
+    req.end()
+  })
+}
+
+function callLLM(messages) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      model: 'deepseek-v4-pro[1m]',
+      max_tokens: 16384,
+      messages: messages.map(m => ({ role: m.role, content: m.content }))
+    })
+    const req = https.request({
+      hostname: 'api.deepseek.com', path: '/anthropic/v1/messages', method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01' },
+      timeout: 300000
     }, res => {
       let data = ''
       res.on('data', c => data += c)
       res.on('end', () => {
         try {
-          const obj = JSON.parse(data)
-          if (obj.error) { reject(new Error(obj.error.message)); return }
-          if (cfg.format === 'openai') { resolve(obj.choices?.[0]?.message?.content || ''); return }
-          const textBlock = obj.content?.find(c => c.type === 'text')
-          resolve(textBlock ? textBlock.text : (obj.content?.[0]?.text || ''))
+          const body = JSON.parse(data)
+          if (body.error) { reject(new Error(body.error.message)); return }
+          const textBlock = body.content?.find(c => c.type === 'text')
+          resolve(textBlock ? textBlock.text : (body.content?.[0]?.text || ''))
         } catch(e) { reject(e) }
       })
     })
@@ -128,7 +154,7 @@ ${catalog}`
   try {
     let result = null
     try {
-      result = await callProAPI([{ role: 'user', content: prompt }])
+      result = await callLLM([{ role: 'user', content: prompt }])
     } catch(e) {
       // Pro failed — fallback to flash
     }
@@ -138,7 +164,7 @@ ${catalog}`
       const flashPrompt = `简化分析以下记忆库快照，只输出关键发现。返回 JSON: {"merges":[], "critical_gaps":[], "summary":"一句话总结"}
 ${catalog.substring(0, 5000)}`
       try {
-        result = await callFlashAPI([{ role: 'user', content: flashPrompt }])
+        result = await callLLM([{ role: 'user', content: flashPrompt }])
       } catch(e2) {
         return null
       }

@@ -5,15 +5,14 @@ const https = require('https')
 const fs = require('fs')
 const path = require('path')
 const ROOT = path.dirname(__filename)
+
 const { getAPIConfig } = require('./config')
 
-function callFlash(prompt) {
+function callLLM(messages, useFlash = true) {
   return new Promise((resolve, reject) => {
-    const cfg = getAPIConfig(true) // flash model
-    if (!cfg || !cfg.hostname) { reject(new Error('API 未配置，请运行 node install.js')); return }
-
-    const body = cfg.bodyBuilder([{ role: 'user', content: prompt }])
-    const req = https.request({
+    let cfg; try { cfg = getAPIConfig(useFlash) } catch(e) { reject(e); return }
+    const body = cfg.bodyBuilder(Array.isArray(messages) ? messages : [{ role: 'user', content: messages }])
+    const req = require('https').request({
       hostname: cfg.hostname, path: cfg.path, method: 'POST',
       headers: cfg.headers, timeout: cfg.timeout
     }, res => {
@@ -34,6 +33,7 @@ function callFlash(prompt) {
     req.end()
   })
 }
+
 
 async function filter(fullDoc, userTask, isSessionStart = false) {
   if (!fullDoc || fullDoc.length < 500) return fullDoc
@@ -79,7 +79,7 @@ Return the FILTERED injection document DIRECTLY (keep the markdown format).
 - For SessionStart: aim for <3500 chars. For UserPromptSubmit: aim for <1200 chars.`
 
   try {
-    const result = await callFlash(prompt)
+    const result = await callLLM(prompt)
     if (!result || result.length < 100) {
       return fullDoc.substring(0, isSessionStart ? 3000 : 1500)
     }
@@ -117,9 +117,6 @@ function terminalSerial(filteredDoc, ctx = {}) {
     }},
     { name: 'budget', fn: () => {
       try { const m = require('./budget'); const r = m.analyze(ctx.index || require('./index')); return r ? `\n## 📊 终端预算\n记忆预算已更新` : null } catch(e) { return null }
-    }},
-    { name: 'fleet_terminal', fn: () => {
-      try { const m=require('./fleet_reporter'); return m.summary() } catch(e) { return null }
     }},
     { name: 'briefing', fn: () => {
       try { const m = require('./briefing'); return `\n## 📋 终端简报\n当前已记录` } catch(e) { return null }

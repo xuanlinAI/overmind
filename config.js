@@ -4,9 +4,9 @@ const path = require('path')
 const DEFAULT = {
   paths: {
     home: process.env.HOME || process.env.USERPROFILE || '/tmp',
-    claude_dir: null, // auto-detected
-    transcript_dir: null, // auto-detected via util.detectTranscriptDir()
-    skills_dir: null, // auto: ~/.claude/skills
+    claude_dir: null,
+    transcript_dir: null,
+    skills_dir: null,
     root: path.dirname(__filename),
   },
   worker: {
@@ -21,11 +21,10 @@ const DEFAULT = {
     dream_min_interval_hours: 8,
   },
   api: {
-    // 用户安装时填写 — install.js 交互式收集
-    format: 'anthropic',           // 'anthropic' | 'openai'
-    hostname: '',                   // 用户填的 API 域名
-    flash_model: '',                // 用户填的 flash 模型名
-    pro_model: '',                  // 用户填的 pro 模型名
+    format: 'anthropic',
+    hostname: '',
+    flash_model: '',
+    pro_model: '',
     flash_timeout_ms: 120000,
     pro_timeout_ms: 300000,
     flash_max_tokens: 16384,
@@ -61,7 +60,7 @@ function load(configPath) {
       const user = JSON.parse(fs.readFileSync(fp, 'utf-8'))
       cfg = deepMerge(cfg, user)
     }
-  } catch(e) {}
+  } catch(e) { console.error('[config] load error:', e.message) }
   return cfg
 }
 
@@ -71,7 +70,6 @@ function resolvePaths(cfg) {
   cfg.paths.home = home
   cfg.paths.claude_dir = cfg.paths.claude_dir || path.join(home, '.claude')
   cfg.paths.skills_dir = cfg.paths.skills_dir || path.join(home, '.claude', 'skills')
-  // transcript_dir is resolved at runtime via util.detectTranscriptDir()
   return cfg
 }
 
@@ -87,16 +85,14 @@ function deepMerge(base, override) {
   return result
 }
 
-// 读配置并构建 API 请求参数 — 避免各模块硬编码
+// API 适配器 — 统一入口，支持 Anthropic/OpenAI 双格式
 function getAPIConfig(useFlash = true) {
   const cfg = load()
   const api = cfg.api || DEFAULT.api
-  // install.js 写入 camelCase，兼容两种键名
-  const flashModel = api.flashModel || api.flash_model || 'deepseek-chat'
-  const proModel = api.proModel || api.pro_model || 'deepseek-chat'
+  const flashModel = process.env.OVERMIND_FLASH_MODEL || api.flashModel || api.flash_model || 'deepseek-v4-flash'
+  const proModel = process.env.OVERMIND_PRO_MODEL || api.proModel || api.pro_model || 'deepseek-v4-pro[1m]'
   const model = useFlash ? flashModel : proModel
-  const apiKey = process.env.OVERMIND_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || ''
-  if (!model || !apiKey) throw new Error('API 未配置: 缺少模型名或密钥。请运行 node install.js')
+  const apiKey = process.env.OVERMIND_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || process.env.OPENAI_API_KEY || ''
   const timeout = useFlash ? api.flash_timeout_ms : api.pro_timeout_ms
   const maxTokens = useFlash ? api.flash_max_tokens : api.pro_max_tokens
   const format = api.format || process.env.OVERMIND_API_FORMAT || 'anthropic'
@@ -105,7 +101,7 @@ function getAPIConfig(useFlash = true) {
   if (format === 'openai') {
     return {
       hostname, path: api.openai_path || '/v1/chat/completions', method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
       bodyBuilder: (messages) => JSON.stringify({
         model, max_tokens: maxTokens,
         messages: messages.map(m => ({ role: m.role, content: m.content }))

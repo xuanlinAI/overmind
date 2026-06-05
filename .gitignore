@@ -48,6 +48,3 @@ watchdog.sh
 install.js.bak.*
 *.o
 reports/
-.history_backfilled
-.prev_injection.json
-.current_instance

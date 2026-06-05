@@ -1,7 +1,6 @@
 const { execSync, spawn } = require('child_process')
 const fs = require('fs'), path = require('path')
 const os = require('os')
-const readline = require('readline')
 
 const ROOT = path.dirname(__filename)
 const HOME = os.homedir()
@@ -14,32 +13,6 @@ const READY = require('./.overmind/installer/ready')
 const LOGGER = require('./.overmind/installer/lib/logger')
 const BACKUP = require('./.overmind/installer/lib/backup')
 const PLATFORM = require('./.overmind/installer/lib/platform')
-
-function promptAPI(defaults) {
-  return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
-    const config = { ...defaults }
-    const steps = [
-      { key: 'format', label: 'API 格式 (anthropic/openai)', default: defaults.format || 'anthropic' },
-      { key: 'hostname', label: 'API 域名', default: defaults.hostname },
-      { key: 'apiKey', label: 'API Key', default: defaults.apiKey || 'sk-xxx' },
-      { key: 'flashModel', label: 'Flash 模型名 (快速/便宜)', default: defaults.flashModel },
-      { key: 'proModel', label: 'Pro 模型名 (深度分析)', default: defaults.proModel },
-    ]
-    let i = 0
-    function ask() {
-      if (i >= steps.length) { rl.close(); resolve(config); return }
-      const s = steps[i++]
-      const d = s.default ? ` [${s.default}]` : ''
-      rl.question(`  ${s.label}${d}: `, (answer) => {
-        const v = answer.trim()
-        if (v) config[s.key] = v
-        ask()
-      })
-    }
-    ask()
-  })
-}
 
 async function main() {
   const session = LOGGER.startSession('install')
@@ -194,14 +167,14 @@ async function main() {
     const smoke = await READY.run({ timeoutMs: 60000 })
     const ccCheck = await READY.testCCCompat(snapshotHandle.files)
 
-    console.log('  管道: ' + (smoke.tests.find(t => t.name === 'Daemon Import')?.ok ? '✅' : '❌') + ' ' +
-      'Worker: ' + (smoke.tests.find(t => t.name === 'Worker Start')?.ok ? '✅' : '❌') + ' ' +
-      'MCP: ' + (smoke.tests.find(t => t.name === 'MCP Registration')?.ok ? '✅' : '⚠️ 重启后生效') + ' ' +
-      'CLAUDEmd: ' + (smoke.tests.find(t => t.name === 'CLAUDE.md')?.ok ? '✅' : '❌'))
+    console.log('  管道: ' + (smoke.tests.find(t => t.name === 'Daemon Import')?.ok ? '✅' : '⚠️') + ' ' +
+      'Worker: ' + (smoke.tests.find(t => t.name === 'Worker Start')?.ok ? '✅' : '⚠️') + ' ' +
+      'MCP: ' + (smoke.tests.find(t => t.name === 'MCP Registration')?.ok ? '✅' : '⚠️') + ' ' +
+      'CLAUDEmd: ' + (smoke.tests.find(t => t.name === 'CLAUDE.md')?.ok ? '✅' : '⚠️'))
 
     if (!smoke.ok || !ccCheck.ok) {
       console.log('')
-      console.log('  ❌ 关键测试失败，正在回滚...')
+      console.log('  ❌ 冒烟/回归失败，正在回滚...')
       if (smoke.failed.length > 0) smoke.failed.forEach(f => console.log('    - ' + f.name + ': ' + f.reason))
       if (ccCheck.regressions.length > 0) ccCheck.regressions.forEach(r => console.log('    - CC回归: ' + (r.path || r.reason)))
       await VAULT.restore(snapshotHandle.files)
@@ -217,89 +190,6 @@ async function main() {
       console.log('  ✅ Worker 已启动')
     } catch (e) { console.log('  ⚠️ Worker: ' + e.message); }
 
-    // Start Daemon — 舰队广播 + 触发器扫描都靠它
-    try {
-      const pyExe = PLATFORM.isWindows
-        ? (require('./.overmind/installer/lib/platform').findExecutable('pythonw') || require('./.overmind/installer/lib/platform').findExecutable('python') || 'python')
-        : 'python3'
-      const d = spawn(pyExe, [path.join(ROOT, 'daemon.py')], { stdio: 'ignore', detached: true, windowsHide: PLATFORM.isWindows })
-      d.on('error', () => {})
-      d.unref()
-      console.log('  ✅ Daemon 已启动')
-    } catch (e) { console.log('  ⚠️ Daemon: ' + e.message); }
-
-    // ═══════════════════════════════════════
-    // Seed files — 防止 CLAUDE.md !include 因文件不存在报错
-    // ═══════════════════════════════════════
-    const seedInjectionPath = path.join(ROOT, 'injection.md')
-    const seedFleetPath = path.join(ROOT, '.fleet_broadcast.md')
-    const seedInjection = `# Xuanlin Overmind
-
-## 当前任务
-(等待首次对话触发注入)
-
-## 项目上下文
-玄霖超脑 v4 已安装 · 等待 CC 触发首次注入
-
-## 相关记忆
-- 暂无相关记忆
-
-## 技能注入
-未注入技能
-
-> 遇到技术问题先用 MCP search_memory 查记忆，再回答。`
-    const seedFleet = `📡 舰队广播 z2
-> 1 个实例 · 刚安装
-> 等待 daemon 启动后自动更新`
-    try {
-      if (!fs.existsSync(seedInjectionPath)) {
-        fs.writeFileSync(seedInjectionPath, seedInjection, 'utf-8')
-        console.log('  ✅ injection.md 种子已生成')
-      }
-    } catch (e) { console.log('  ⚠️ injection.md: ' + e.message) }
-    try {
-      if (!fs.existsSync(seedFleetPath)) {
-        fs.writeFileSync(seedFleetPath, seedFleet, 'utf-8')
-        console.log('  ✅ .fleet_broadcast.md 种子已生成')
-      }
-    } catch (e) { console.log('  ⚠️ .fleet_broadcast.md: ' + e.message) }
-
-    // ═══════════════════════════════════════════════════════
-    // API Configuration — interactive prompt
-    // ═══════════════════════════════════════════════════════
-    console.log('')
-    console.log('  ═══════════════════════════════════════')
-    console.log('  API 配置')
-    console.log('  ═══════════════════════════════════════')
-    console.log('')
-    console.log('  按回车使用默认值（DeepSeek），或输入自定义值')
-    console.log('')
-
-    const apiConfig = await promptAPI({
-      format: 'anthropic',
-      hostname: 'api.deepseek.com',
-      apiKey: process.env.OVERMIND_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || '',
-      flashModel: '',
-      proModel: '',
-    })
-
-    // Write to .overmind_env.json
-    envConfig.api = apiConfig
-    CONFIG.write(envConfig)
-    console.log('  ✅ API 配置已写入 .overmind_env.json')
-
-    // Also write to settings.json env for CC hooks
-    settings.env = settings.env || {}
-    if (apiConfig.apiKey && !apiConfig.apiKey.includes('YOUR_')) {
-      settings.env.OVERMIND_API_KEY = apiConfig.apiKey
-      settings.env.OVERMIND_API_FORMAT = apiConfig.format
-      settings.env.OVERMIND_API_HOSTNAME = apiConfig.hostname
-      settings.env.OVERMIND_FLASH_MODEL = apiConfig.flashModel
-      settings.env.OVERMIND_PRO_MODEL = apiConfig.proModel
-      fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2) + '\n', 'utf-8')
-      console.log('  ✅ API 配置已写入 settings.json env')
-    }
-
     // Summary
     console.log('')
     console.log('  ═══════════════════════════════════════')
@@ -311,8 +201,9 @@ async function main() {
       if (envConfig.features.disabled.length > 0) console.log('  已禁用: ' + envConfig.features.disabled.map(f => f.id).join(', '))
       console.log('')
     }
-    console.log('  1. 重启 Claude Code')
-    console.log('  2. 输入任意内容 — 应看到超脑注入')
+    console.log('  1. 设置 API key: export DEEPSEEK_API_KEY=sk-xxx')
+    console.log('  2. 重启 Claude Code')
+    console.log('  3. 输入任意内容 — 应看到超脑注入')
     console.log('')
     console.log('  GitHub: https://github.com/xuanlinAI/overmind')
 

@@ -3,15 +3,14 @@ const path = require('path')
 const https = require('https')
 
 const ROOT = path.dirname(__filename)
+
 const { getAPIConfig } = require('./config')
 
-function callAPI(messages) {
+function callLLM(messages, useFlash = false) {
   return new Promise((resolve, reject) => {
-    const cfg = getAPIConfig(false) // pro model
-    if (!cfg || !cfg.hostname) { reject(new Error('API 未配置，请运行 node install.js')); return }
-
+    let cfg; try { cfg = getAPIConfig(useFlash) } catch(e) { reject(e); return }
     const body = cfg.bodyBuilder(messages)
-    const req = https.request({
+    const req = require('https').request({
       hostname: cfg.hostname, path: cfg.path, method: 'POST',
       headers: cfg.headers, timeout: cfg.timeout
     }, res => {
@@ -20,7 +19,7 @@ function callAPI(messages) {
       res.on('end', () => {
         try {
           const obj = JSON.parse(data)
-          if (obj.error) { reject(new Error(obj.error.message)); return }
+          if (obj.error) { reject(new Error(obj.error.message || 'API error')); return }
           if (cfg.format === 'openai') { resolve(obj.choices?.[0]?.message?.content || ''); return }
           const textBlock = obj.content?.find(c => c.type === 'text')
           resolve(textBlock ? textBlock.text : (obj.content?.[0]?.text || ''))
@@ -54,7 +53,7 @@ async function consolidate() {
 Session context:
 ${context.substring(0, 2000)}`
 
-      const epSummary = await callAPI([{ role: 'user', content: epPrompt }])
+      const epSummary = await callLLM([{ role: 'user', content: epPrompt }])
       if (epSummary) {
         const epData = {
           sessionId,
@@ -64,18 +63,6 @@ ${context.substring(0, 2000)}`
         }
         const epFile = path.join(ROOT, 'memory', 'episodic', `${sessionId}.json`)
         fs.writeFileSync(epFile, JSON.stringify(epData, null, 2), 'utf-8')
-
-        // Also write to DB for MCP search
-        try {
-          const ctx = context ? context.substring(0, 200) : ''
-          const taskMatch = ctx.match(/当前任务\s*\n(.+)/)
-          const task = taskMatch ? taskMatch[1].substring(0, 200) : ''
-          const db = require('better-sqlite3')(path.join(ROOT, 'memory.db'))
-          db.prepare(`INSERT INTO episodic (session_id, summary, task, message_count, transcript_path, project_name, created_at) VALUES (?,?,?,?,?,?,datetime('now'))`).run(
-            sessionId, epSummary.substring(0, 500), task, stats.semanticCount || 0, '', '')
-          db.close()
-        } catch(e) {}
-
         process.stdout.write(`[overmind] episode saved: ${epSummary.substring(0, 80)}...\n`)
       }
     } catch(e) {
@@ -90,7 +77,7 @@ ${context.substring(0, 2000)}`
 
 ${context.substring(0, 2000)}`
 
-      const result = await callAPI([{ role: 'user', content: prompt }])
+      const result = await callLLM([{ role: 'user', content: prompt }])
       const lines = result.split('\n').filter(l => l.includes(': '))
       let extracted = 0
       for (const line of lines) {

@@ -2,18 +2,35 @@
 const https = require('https')
 const path = require('path')
 const ROOT = path.dirname(__filename)
+
 const { getAPIConfig } = require('./config')
 
-function callFlash(prompt) {
+function callLLM(messages, useFlash = true) {
   return new Promise((resolve, reject) => {
-    const cfg = getAPIConfig(true)
-    if (!cfg || !cfg.hostname) { reject(new Error('API 未配置')); return }
-
-    const body = cfg.bodyBuilder([{ role: 'user', content: prompt }])
-    const req = https.request({ hostname: cfg.hostname, path: cfg.path, method: 'POST', headers: cfg.headers, timeout: cfg.timeout }, res => { let d = ''; res.on('data', c => d += c); res.on('end', () => { try { const obj = JSON.parse(d); if (obj.error) { reject(new Error(obj.error.message || 'API error')); return } if (cfg.format === 'openai') resolve(obj.choices?.[0]?.message?.content || ''); else { const tb = obj.content?.find(c => c.type === 'text'); resolve(tb ? tb.text : (obj.content?.[0]?.text || '')) } } catch(e) { reject(e) } }) })
-    req.on('error', reject); req.write(body); req.end()
+    let cfg; try { cfg = getAPIConfig(useFlash) } catch(e) { reject(e); return }
+    const body = cfg.bodyBuilder(Array.isArray(messages) ? messages : [{ role: 'user', content: messages }])
+    const req = require('https').request({
+      hostname: cfg.hostname, path: cfg.path, method: 'POST',
+      headers: cfg.headers, timeout: cfg.timeout
+    }, res => {
+      let data = ''
+      res.on('data', c => data += c)
+      res.on('end', () => {
+        try {
+          const obj = JSON.parse(data)
+          if (obj.error) { reject(new Error(obj.error.message || 'API error')); return }
+          if (cfg.format === 'openai') { resolve(obj.choices?.[0]?.message?.content || ''); return }
+          const textBlock = obj.content?.find(c => c.type === 'text')
+          resolve(textBlock ? textBlock.text : (obj.content?.[0]?.text || ''))
+        } catch(e) { reject(e) }
+      })
+    })
+    req.on('error', reject)
+    req.write(body)
+    req.end()
   })
 }
+
 
 async function attack(output, context = {}) {
   if (!output || output.length < 50) return null // too short to attack
@@ -44,7 +61,7 @@ ${blindSpots.length ? '用户盲点: ' + blindSpots.map(b => b.topic).join(', ')
 无问题时返回 {"objections":[],"overall_assessment":"safe"}`
 
   try {
-    const result = await callFlash(prompt)
+    const result = await callLLM(prompt)
     let critique = null
     try { critique = JSON.parse(result.trim()) } catch(e) {
       const m = result.match(/\{[\s\S]*\}/)

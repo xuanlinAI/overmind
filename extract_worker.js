@@ -10,33 +10,14 @@ const ROOT = path.dirname(__filename)
 const { shouldSkipExtraction } = require(path.join(ROOT, 'privacy_filter'))
 const EPISODIC_DIR = path.join(ROOT, 'memory', 'episodic')
 const adapter = require(path.join(ROOT, 'adapters')).getAgent()
+
 const { getAPIConfig } = require('./config')
-const LOG_FILE = path.join(ROOT, 'worker.log')
-let _hermesCache = null
-function getHermesPrompt() {
-  if (_hermesCache) return _hermesCache
-  _hermesCache = fs.readFileSync(path.join(ROOT, 'HERMES_PROMPT.md'), 'utf-8')
-  // Auto-reload every 10 minutes
-  setTimeout(() => _hermesCache = null, 600000).unref()
-  return _hermesCache
-}
-const POLL_INTERVAL = 30000
-const MIN_NEW_LINES = 25
-const MAX_LIFETIME = 8 * 60 * 60 * 1000
 
-if (!fs.existsSync(EPISODIC_DIR)) fs.mkdirSync(EPISODIC_DIR, { recursive: true })
-
-function log(msg) {
-  fs.appendFileSync(LOG_FILE, `${new Date().toISOString()} [worker] ${msg}\n`)
-}
-
-function callDeepSeek(messages) {
+function callLLM(messages, useFlash = true) {
   return new Promise((resolve, reject) => {
-    const cfg = getAPIConfig(true)
-    if (!cfg || !cfg.hostname) { reject(new Error('API 未配置')); return }
-
-    const body = cfg.bodyBuilder(messages)
-    const req = https.request({
+    let cfg; try { cfg = getAPIConfig(useFlash) } catch(e) { reject(e); return }
+    const body = cfg.bodyBuilder(Array.isArray(messages) ? messages : [{ role: 'user', content: messages }])
+    const req = require('https').request({
       hostname: cfg.hostname, path: cfg.path, method: 'POST',
       headers: cfg.headers, timeout: cfg.timeout
     }, res => {
@@ -116,7 +97,7 @@ ${getExistingKeys()}
 请按格式输出每条新发现的事实。`
 
   try {
-    const result = await callDeepSeek([{ role: 'system', content: getHermesPrompt() }, { role: 'user', content: prompt }])
+    const result = await callLLM([{ role: 'system', content: getHermesPrompt() }, { role: 'user', content: prompt }])
     if (!result) return 0
 
     const index = require(path.join(ROOT, 'index'))
@@ -166,7 +147,7 @@ ${getExistingKeys()}
       const allMems = index.getAllMemoryKeys()
       if (allMems.length >= 5) {
         const relPrompt = graph.buildExtractionPrompt(allMems, text)
-        const relResult = await callDeepSeek([{ role: 'user', content: relPrompt }])
+        const relResult = await callLLM([{ role: 'user', content: relPrompt }])
         if (relResult) {
           const relations = graph.parseExtractionResult(relResult)
           if (relations.length > 0) {
@@ -214,7 +195,7 @@ Rules:
 Conversation:
 ${text.substring(0, 4000)}`
 
-      const prefResult = await callDeepSeek([{ role: 'user', content: skillPrefPrompt }])
+      const prefResult = await callLLM([{ role: 'user', content: skillPrefPrompt }])
       if (prefResult) {
         const prefLines = prefResult.split('\n').filter(l => l.startsWith('SKILL_PREF:'))
         for (const line of prefLines) {
@@ -321,29 +302,6 @@ async function main() {
   if (!transcript) { log('no transcript found'); return }
 
   log(`watching: ${transcript.name}`)
-
-  // Backfill: on first run, import existing CC history into Overmind memory
-  const BACKFILL_MARKER = path.join(ROOT, '.history_backfilled')
-  const MAX_BACKFILL_LINES = 50000 // process at most 50K lines to avoid OOM
-  if (!fs.existsSync(BACKFILL_MARKER)) {
-    log('backfill: importing existing conversation history...')
-    try {
-      const allLines = loadNewLines(transcript.path, 0) // read from beginning
-      if (allLines.lines.length > 0) {
-        const toProcess = allLines.lines.slice(-MAX_BACKFILL_LINES)
-        log(`backfill: found ${allLines.lines.length} existing lines (processing last ${toProcess.length})...`)
-        // Process in batches of 2000 to avoid API overload
-        for (let i = 0; i < toProcess.length; i += 2000) {
-          const batch = toProcess.slice(i, i + 2000)
-          await extractAndSave(batch, transcript.name)
-          log(`backfill: batch ${Math.floor(i/2000)+1}/${Math.ceil(toProcess.length/2000)} done (${i+batch.length}/${toProcess.length} lines)`)
-        }
-      }
-    } catch(e) { log(`backfill error: ${e.message}`) }
-    fs.writeFileSync(BACKFILL_MARKER, new Date().toISOString())
-    log('backfill: done — history imported to Overmind memory')
-  }
-
   let lastPos = fs.statSync(transcript.path).size
   let accumulatedLines = []
   let startTime = Date.now()

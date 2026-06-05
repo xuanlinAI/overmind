@@ -280,38 +280,38 @@ function init() {
         orchestrator:  (m) => { const id=m.detectInstanceId(); m.register(id); m.heartbeat(id) },
         briefing:      (m) => m.generate(null,[],[]),
         budget:        (m) => m.analyze(idx),
-        red_team:      (m) => m.attack(userTask),
-        shield:        (m) => m.verify(userTask),
-        gatekeeper:    (m) => m.scan(userTask),
-        forecast:      (m) => m.predict(graph, (ctx.mems||[]).map(m=>m.key).filter(Boolean)),
-        causalviz:     (m) => m.visualize(graph, idx),
-        arbitrator:    (m) => m.resolve(idx, graph),
-        compress:      (m) => m.compress(idx),
-        continuity:    (m) => m.detect(idx),
-        timetravel:    (m) => m.travel(idx),
-        research:      (m) => m.analyze(idx),
-        hypothesis:    (m) => m.register(idx),
-        lineage:       (m) => m.trace(idx),
-        marketplace:   (m) => m.publish(),
-        intent:        (m) => m.predict(userTask),
-        preload:       (m) => m.preload(null, idx, graph, {}),
-        noiselearner:  (m) => m.learn(idx),
-        predictor:     (m) => m.predict(idx, graph),
-        reason:        (m) => m.explainSkills(userTask),
-        synthesizer:   (m) => m.synthesize(idx),
-        adaptive:      (m) => m.computeInterval(),
-        anticompact:   (m) => m.detectCompaction(idx) || m.detectCompaction(),
-        commit_gate:   (m) => m.check(),
-        test_first_enforcer: (m) => m.check(idx),
-        morning:       (m) => m.generate(),
-        privacy_filter:(m) => m.shouldSkipExtraction(userTask),
-        fleet:         (m) => m.syncShared(),
-        communicator:  (m) => null,
-        nexus:         (m) => m.scheduleWarmup(()=>{}),
-        pool:          (m) => m.checkpoint(),
-        adapters:      (m) => m.detect(),
-        graph:         (m) => null,
-        index:         (m) => null
+        red_team:      (m) => m.audit ? m.audit(userTask) : null,
+        shield:        (m) => m.check ? m.check(idx) : null,
+        gatekeeper:    (m) => m.scan ? m.scan(userTask) : null,
+        forecast:      (m) => m.predict ? m.predict(graph, []) : null,
+        causalviz:     (m) => m.trace ? m.trace(graph, idx) : null,
+        arbitrator:    (m) => m.resolve ? m.resolve(idx) : null,
+        compress:      (m) => m.run ? m.run(idx) : null,
+        continuity:    (m) => m.detect ? m.detect(idx) : null,
+        timetravel:    (m) => m.snapshot ? m.snapshot(idx) : null,
+        research:      (m) => m.analyze ? m.analyze(idx) : null,
+        hypothesis:    (m) => m.generate ? m.generate(idx) : null,
+        lineage:       (m) => m.track ? m.track(idx) : null,
+        marketplace:   (m) => m.sync ? m.sync() : null,
+        intent:        (m) => m.predict ? m.predict(userTask) : null,
+        preload:       (m) => m.load ? m.load(idx) : null,
+        noiselearner:  (m) => m.learn ? m.learn(idx) : null,
+        predictor:     (m) => m.predict ? m.predict(idx, graph) : null,
+        reason:        (m) => m.analyze ? m.analyze(userTask) : null,
+        synthesizer:   (m) => m.synthesize ? m.synthesize(idx) : null,
+        adaptive:      (m) => m.adjust ? m.adjust(idx) : null,
+        anticompact:   (m) => m.check ? m.check(idx) : null,
+        commit_gate:   (m) => m.check ? m.check() : null,
+        test_first_enforcer: (m) => m.enforce ? m.enforce(idx) : null,
+        morning:       (m) => m.generate ? m.generate() : null,
+        privacy_filter:(m) => m.filter ? m.filter(userTask) : null,
+        fleet:         (m) => m.status ? m.status() : null,
+        communicator:  (m) => null, // communicator runs in serial pipeline
+        nexus:         (m) => m.link ? m.link(idx) : null,
+        pool:          (m) => m.health ? m.health() : null,
+        adapters:      (m) => m.detect ? m.detect() : null,
+        graph:         (m) => null, // graph used directly elsewhere
+        index:         (m) => null, // index used directly elsewhere
       }
 
       for (const name of ALL_MODULES) {
@@ -348,9 +348,9 @@ function init() {
         { name: 'composer', fn: (m) => { if (m.detectChains) m.detectChains(require('./index')) } },
         { name: 'transfer', fn: (m) => { if (m.getTransferable) instances.forEach(i => m.getTransferable(i.topic||'', 3)) } },
         { name: 'anomaly', fn: (m) => { if (m.detectFleetAnomaly) m.detectFleetAnomaly(instances) } },
-        { name: 'briefing', fn: (m) => { if (m.recordFleetActivity) m.recordFleetActivity(instances) } },
-        { name: 'budget_killer', fn: (m) => { if (m.trackFleet) m.trackFleet(instances) } },
-        { name: 'counterfactual', fn: (m) => { if (m.checkFleetDrift) m.checkFleetDrift(instances) } },
+        { name: 'briefing', fn: (m) => { if (m.generate) m.generate(JSON.stringify(fleetData)) } },
+        { name: 'budget_killer', fn: (m) => { if (m.track) m.track(0, [], [], fleetData) } },
+        { name: 'counterfactual', fn: (m) => { if (m.checkDrift) m.checkDrift(fleetData) } },
         { name: 'orchestrator', fn: (m) => { try { const id=m.detectInstanceId(); m.heartbeat(id) } catch(e) {} } },
         { name: 'synthesizer', fn: (m) => { if (m.synthesizeFleet) m.synthesizeFleet(instances) } },
       ]
@@ -379,16 +379,15 @@ function init() {
       // Terminal-specific handlers — modules see what user actually gets
       const handlers = [
         { name: 'persona', fn: (m) => { if (m.observeTerminal) m.observeTerminal(filteredDoc) } },
-        { name: 'anomaly', fn: (m) => { if (m.detectTerminalAnomaly) m.detectTerminalAnomaly(filteredDoc) } },
-        { name: 'briefing', fn: (m) => { if (m.recordTerminal) m.recordTerminal(filteredDoc, skills) } },
-        { name: 'lineage', fn: (m) => { if (m.trackTerminal) skills.forEach(s => { try { m.trackTerminal(s.name||s, filteredDoc) } catch(e) {} }) } },
-        { name: 'noiselearner', fn: (m) => { if (m.learnFromTerminal) m.learnFromTerminal(filteredDoc) } },
-        { name: 'budget_killer', fn: (m) => { if (m.trackTerminal) m.trackTerminal(filteredDoc.length, skills, mems) } },
-        { name: 'counterfactual', fn: (m) => { if (m.terminalDrift) m.terminalDrift(filteredDoc) } },
-        { name: 'composer', fn: (m) => { if (m.detectTerminalChains) m.detectTerminalChains(skills) } },
+        { name: 'briefing', fn: (m) => { if (m.generate) m.generate(filteredDoc) } },
+        { name: 'lineage', fn: (m) => { if (m.trace) skills.forEach(s => { try { m.trace(s.name||s, filteredDoc) } catch(e) {} }) } },
+        { name: 'noiselearner', fn: (m) => { if (m.learn) m.learn(filteredDoc) } },
+        { name: 'budget_killer', fn: (m) => { if (m.track) m.track(filteredDoc.length, skills, mems) } },
+        { name: 'counterfactual', fn: (m) => { if (m.checkDrift) m.checkDrift(filteredDoc) } },
+        { name: 'composer', fn: (m) => { if (m.detectChains) m.detectChains(skills) } },
         { name: 'orchestrator', fn: (m) => { try { m.heartbeat(m.detectInstanceId()) } catch(e) {} } },
-        { name: 'synthesizer', fn: (m) => { if (m.synthesizeTerminal) m.synthesizeTerminal(filteredDoc) } },
-        { name: 'transfer', fn: (m) => { if (m.transferTerminal) m.transferTerminal(data.userTask||'', filteredDoc) } },
+        { name: 'synthesizer', fn: (m) => { if (m.synthesize) m.synthesize(filteredDoc) } },
+        { name: 'transfer', fn: (m) => { if (m.getTransferable) m.getTransferable(data.userTask||'', 5) } },
       ]
 
       const TIMEOUT_MS = 3000
@@ -399,20 +398,11 @@ function init() {
         ]).catch(err => logger(`${name}: ${err.message}`))
       }
 
-      logger(`terminal broadcast → ${handlers.length} modules, doc=${filteredDoc.length}C`)
+      logger(`terminal broadcast → 10 modules, doc=${filteredDoc.length}C`)
     } catch(e) {}
   })
 
   console.log('[v4] Wiring initialized — 6 channels (CH1:37-stage serial | CH2:48-module parallel | CH3:z2直连 | CH4:z2中枢→bus | CH5:n2终端8串 | CH6:n2终端11并)')
-
-  // Write current CC session ID for fleet broadcast self-identification
-  try {
-    const orch = require('./orchestrator')
-    const selfId = orch.detectInstanceId()
-    if (selfId && selfId.length > 8) {
-      require('fs').writeFileSync(require('path').join(ROOT, '.current_instance'), selfId)
-    }
-  } catch(e) {}
 
   // Drain event_queue → emit latest fleet:broadcast on bus (CHANNEL 4 bridge)
   // With dedup: skip if fleet data unchanged since last drain

@@ -10,72 +10,72 @@ pipeline.register({ name: 'clarify', phase: 'inject', priority: 7, run: (ctx) =>
 
 pipeline.register({
   name: 'persona', phase: 'inject', priority: 10,
-  run: (ctx) => {
+  run: (ctx) => { try {
     const persona = require('./persona')
     const profile = persona.analyze(ctx.index)
     if (profile && profile.traits && profile.traits.length > 0) return persona.formatPersona(profile)
     return null
-  }
+  } catch(e) { return null } }
 })
 
 pipeline.register({
   name: 'anomaly', phase: 'inject', priority: 20,
-  run: (ctx) => {
+  run: (ctx) => { try {
     const anomaly = require('./anomaly')
     const anom = anomaly.detect(ctx.index, ctx.userTask || '')
     if (anom.length > 0) return anomaly.formatAnomalies(anom)
     return null
-  }
+  } catch(e) { return null } }
 })
 
 pipeline.register({
   name: 'optimizer', phase: 'inject', priority: 30,
-  run: (ctx) => {
+  run: (ctx) => { try {
     const optimizer = require('./optimizer')
     const opt = optimizer.analyze()
     if (opt && opt.estimates.total_tokens > 10000) return optimizer.formatReport(opt)
     return null
-  }
+  } catch(e) { return null } }
 })
 
 pipeline.register({
   name: 'composer', phase: 'inject', priority: 40,
-  run: (ctx) => {
+  run: (ctx) => { try {
     const composer = require('./composer')
     const chains = composer.detectChains(ctx.index)
     if (chains && chains.chains.length > 0) return composer.formatChains(chains)
     return null
-  }
+  } catch(e) { return null } }
 })
 
 pipeline.register({
   name: 'verifier', phase: 'inject', priority: 50,
-  run: (ctx) => {
+  run: (ctx) => { try {
     const verifier = require('./verifier')
     const vf = verifier.verify(ctx.index)
     if (vf && vf.scanned > 0) return verifier.formatVerification(vf)
     return null
-  }
+  } catch(e) { return null } }
 })
 
 pipeline.register({
   name: 'prefetch', phase: 'inject', priority: 60,
-  run: (ctx) => {
+  run: (ctx) => { try {
     const prefetch = require('./prefetch')
     const pf = prefetch.prefetch(ctx.cwd || process.cwd(), ctx.userTask || '')
     if (pf && pf.hints.length > 0) return prefetch.formatPrefetch(pf)
     return null
-  }
+  } catch(e) { return null } }
 })
 
 pipeline.register({
   name: 'dream', phase: 'inject', priority: 70,
-  run: (ctx) => {
+  run: (ctx) => { try {
     const dream = require('./dream')
     const df = dream.loadDreamFindings()
     if (df) return dream.formatDream(df)
     return null
-  }
+  } catch(e) { return null } }
 })
 
 pipeline.register({
@@ -94,12 +94,12 @@ pipeline.register({
 
 pipeline.register({
   name: 'transfer', phase: 'inject', priority: 90,
-  run: (ctx) => {
+  run: (ctx) => { try {
     const transfer = require('./transfer')
     const transRows = transfer.getTransferable(ctx.userTask || ctx.projCtx || '', 5)
     if (transRows.length > 0) return transfer.formatTransferable(transRows)
     return null
-  }
+  } catch(e) { return null } }
 })
 
 pipeline.register({
@@ -128,8 +128,6 @@ pipeline.register({ name: 'checkpoint', phase: 'inject', priority: 55, run: (ctx
 pipeline.register({ name: 'tdd_enforcer', phase: 'inject', priority: 56, run: (ctx) => { return null } }) // triggered per-file, not per-injection
 pipeline.register({ name: 'theory_of_mind', phase: 'inject', priority: 65, cacheKey:'tom', run: (ctx) => { try { const t=require('./theory_of_mind'); const m=t.load(); const w=t.predictErrors(m,ctx.userTask||''); return w.length?t.format(w):null } catch(e){return null} } })
 pipeline.register({ name: 'budget_killer', phase: 'inject', priority: 85, run: (ctx) => { try { const b=require('./budget_killer'); const r=b.track(ctx.userTask?.substring(0,30)||'main',null); return r?b.format(r):null } catch(e){return null} } })
-pipeline.register({ name: 'fleet_reporter', phase: 'inject', priority: 103, run: (ctx) => { try { const m=require('./fleet_reporter'); return m.report() } catch(e){return null} } })
-
 pipeline.register({ name: 'briefing', phase: 'inject', priority: 105, run: (ctx) => { try { const b=require('./briefing'); return b.format(b.generate(null,[],[])) } catch(e){return null} } })
 pipeline.register({ name: 'deadcode', phase: 'inject', priority: 120, cacheKey:'dead', run: (ctx) => { try { const d=require('./deadcode'); const r=d.scan(ctx.index); return r&&r.zombies>0?d.format(r):null } catch(e){return null} } })
 
@@ -141,7 +139,7 @@ pipeline.register({ name: 'shield', phase: 'inject', priority: 8, run: (ctx) => 
 
 pipeline.register({ name: 'red_team', phase: 'inject', priority: 15, run: (ctx) => { try { const m=require('./red_team'); const r=m.attack(ctx.userTask||''); return (r&&Object.keys(r).length>0) ? m.format(r) : null } catch(e){return null} } })
 
-pipeline.register({ name: 'forecast', phase: 'inject', priority: 25, run: (ctx) => { try { const m=require('./forecast'); const keys = (ctx.mems || []).map(m => m.key).filter(Boolean); const fc=m.predict(ctx.graph||require('./graph'), keys); return fc?.predictions?.length>0 ? m.formatForecast(fc) : null } catch(e){return null} } })
+pipeline.register({ name: 'forecast', phase: 'inject', priority: 25, run: (ctx) => { try { const m=require('./forecast'); const fc=m.predict(ctx.graph||require('./graph'), []); return fc?.predictions?.length>0 ? m.formatForecast(fc) : null } catch(e){return null} } })
 
 pipeline.register({ name: 'continuity', phase: 'inject', priority: 35, cacheKey:'cont', run: (ctx) => { try { const m=require('./continuity'); const r=m.detect(ctx.index); return (r&&r.is_continuation) ? m.formatContinuity(r) : null } catch(e){return null} } })
 
@@ -159,7 +157,7 @@ pipeline.register({ name: 'lineage', phase: 'inject', priority: 92, run: (ctx) =
 
 pipeline.register({ name: 'budget_pipe', phase: 'inject', priority: 97, run: (ctx) => { try { const m=require('./budget'); const r=m.analyze(ctx.index); return r ? m.formatBudget(r) : null } catch(e){return null} } })
 
-pipeline.register({ name: 'preload_pipe', phase: 'inject', priority: 102, run: (ctx) => { try { const m=require('./preload'); const prediction = ctx.prediction || {}; const r=m.preload(prediction, ctx.index, ctx.graph||require('./graph'), ctx.intent); return (r&&r.preload) ? m.formatPreload(r) : null } catch(e){return null} } })
+pipeline.register({ name: 'preload_pipe', phase: 'inject', priority: 102, run: (ctx) => { try { const m=require('./preload'); const r=m.preload(process.cwd(), ctx.userTask||''); return (r&&r.preload) ? m.formatPreload(r) : null } catch(e){return null} } })
 
 pipeline.register({ name: 'causalviz', phase: 'inject', priority: 108, cacheKey:'causal', run: (ctx) => { try { const m=require('./causalviz'); const g=ctx.graph||require('./graph'); const idx=ctx.index; const keys=idx.getAllMemoryKeys ? idx.getAllMemoryKeys().slice(0,10).map(k=>k.key) : []; const r=m.visualize(g, keys); return r ? m.formatCausal(r) : null } catch(e){return null} } })
 

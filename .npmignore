@@ -52,8 +52,3 @@ spawn_relay.vbs
 .event_queue/
 .cc-checkpoints/
 .trigger_*
-.history_backfilled
-.prev_injection.json
-.current_instance
-.overmind_env.json
-*.o

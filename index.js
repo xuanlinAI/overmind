@@ -128,6 +128,7 @@ function ensureMemoryDirs() {
 // ---- SEMANTIC MEMORY ----
 
 function saveSemantic(key, content, tags = '', sourceSession = null, dedupKey = null, confidence = 0.5, commitHash = null) {
+  if (!db) init()
   // Dedup check: if dedupKey provided, check for existing memory with same dedup key
   if (dedupKey) {
     try {
@@ -180,23 +181,21 @@ function searchHybrid(query, limit = 10) {
 
   return bm25.map(r => {
     let accessBoost = 0
-    try {
-      const meta = db.prepare('SELECT access_count, updated_at FROM semantic WHERE id = ?').get(r.id)
-      if (meta) {
-        accessBoost = Math.min(meta.access_count * 0.02, 0.15)
-        const daysSinceUpdate = (Date.now() - new Date(meta.updated_at + 'Z').getTime()) / 86400000
-        if (daysSinceUpdate < 7) accessBoost += 0.1
-      }
-    } catch(e) {}
+    const accessCount = r.access_count || 0
+    accessBoost = Math.min(accessCount * 0.02, 0.15)
+    if (r.updated_at) {
+      const daysSinceUpdate = (Date.now() - new Date(r.updated_at + 'Z').getTime()) / 86400000
+      if (daysSinceUpdate < 7) accessBoost += 0.1
+    }
     return { ...r, combined: ((limit - Math.min(bm25.indexOf(r), limit)) / limit) + accessBoost }
   })
     .sort((a, b) => b.combined - a.combined)
     .slice(0, limit)
 }
-
 // ---- PROCEDURAL MEMORY ----
 
 function saveProcedural(name, description, steps, triggers = '') {
+  if (!db) init()
   const existing = db.prepare('SELECT id FROM procedural WHERE name = ?').get(name)
   if (existing) {
     db.prepare('UPDATE procedural SET description=?, steps=?, trigger_patterns=? WHERE name=?')
@@ -211,14 +210,10 @@ function saveProcedural(name, description, steps, triggers = '') {
 }
 
 function searchProcedural(query, limit = 5) {
+  if (!db) init()
   const q = query.replace(/[^\w\s一-鿿]/g, ' ').split(/\s+/).filter(w => w.length > 0).join(' OR ')
   if (!q) return []
-  try {
-    return db.prepare(`SELECT f.rowid as id, p.name, p.description, p.trigger_patterns, p.steps, rank FROM procedural_fts f JOIN procedural p ON p.name = f.name WHERE procedural_fts MATCH ? ORDER BY rank LIMIT ?`).all(q, limit)
-  } catch(e) {
-    // Fallback: FTS may be out of sync, try direct query
-    return db.prepare(`SELECT id, name, description, trigger_patterns, steps FROM procedural WHERE (description LIKE ? OR name LIKE ?) AND status='active' LIMIT ?`).all('%'+query.split(/\s+/)[0]+'%', '%'+query.split(/\s+/)[0]+'%', limit)
-  }
+  return db.prepare(`SELECT rowid as id, name, description, trigger_patterns, steps, rank FROM procedural_fts WHERE procedural_fts MATCH ? ORDER BY rank LIMIT ?`).all(q, limit)
 }
 
 // ---- EPISODIC ----
@@ -264,6 +259,7 @@ function loadWorking(sessionId) {
 // ---- SKILL INDEX ----
 
 function indexAllSkills(skillsDir) {
+  if (!db) init()
   if (!fs.existsSync(skillsDir)) return []
 
   function scan(dir, depth = 0) {
@@ -383,11 +379,13 @@ function getAllMemoryKeys() {
 // ---- EVOLUTION ----
 
 function logEvolution(sessionId, action, detail = '') {
+  if (!db) init()
   db.prepare('INSERT INTO evolution_log (session_id, action, detail) VALUES (?,?,?)')
     .run(sessionId, action, JSON.stringify(detail).substring(0, 1000))
 }
 
 function detectPatterns() {
+  if (!db) init()
   const frequent = db.prepare(`
     SELECT key, content, access_count FROM semantic
     WHERE access_count >= 3 AND tags NOT LIKE '%system%'
@@ -403,26 +401,48 @@ function detectPatterns() {
 }
 
 function compactMemories() {
-  const dups = db.prepare(`
-    SELECT key, COUNT(*) as cnt, GROUP_CONCAT(id) as ids FROM semantic
-    WHERE tags NOT LIKE '%system%'
-    GROUP BY key HAVING cnt > 1
+  if (!db) init()
+  const all = db.prepare(`
+    SELECT id, key, content, COALESCE(confidence,0.5) as confidence,
+           COALESCE(effectiveness_score,0.5) as effectiveness_score
+    FROM semantic WHERE tags NOT LIKE '%system%'
   `).all()
 
-  for (const dup of dups) {
-    const ids = dup.ids.split(',').map(Number)
-    const keepId = ids[0]
-    const removeIds = ids.slice(1)
-    db.prepare(`UPDATE semantic SET content = (SELECT content FROM semantic WHERE id = ?), updated_at = datetime('now') WHERE id = ?`)
-      .run(keepId, keepId)
-    removeIds.forEach(id => {
-      db.prepare('DELETE FROM semantic WHERE id = ?').run(id)
-    })
-    logEvolution('system', 'compact', { merged: dup.key, count: dup.cnt })
+  const removed = new Set()
+  for (let i = 0; i < all.length; i++) {
+    if (removed.has(all[i].id)) continue
+    const wordsA = new Set((all[i].content || '').toLowerCase().split(/[^a-z0-9\u4e00-\u9fff]+/).filter(w => w.length > 1))
+    if (wordsA.size === 0) continue
+    for (let j = i + 1; j < all.length; j++) {
+      if (removed.has(all[j].id)) continue
+      const wordsB = new Set((all[j].content || '').toLowerCase().split(/[^a-z0-9\u4e00-\u9fff]+/).filter(w => w.length > 1))
+      if (wordsB.size === 0) continue
+      const intersection = [...wordsA].filter(w => wordsB.has(w)).length
+      const union = new Set([...wordsA, ...wordsB]).size
+      const similarity = intersection / union
+      if (similarity > 0.9) {
+        const a = all[i], b = all[j]
+        const scoreA = a.effectiveness_score + a.confidence
+        const scoreB = b.effectiveness_score + b.confidence
+        if (scoreA >= scoreB) {
+          removed.add(b.id)
+          db.prepare('DELETE FROM semantic WHERE id = ?').run(b.id)
+          db.prepare('DELETE FROM semantic_fts WHERE rowid = (SELECT rowid FROM semantic_fts WHERE key = ?)').run(b.key)
+        } else {
+          removed.add(a.id)
+          db.prepare('DELETE FROM semantic WHERE id = ?').run(a.id)
+          db.prepare('DELETE FROM semantic_fts WHERE rowid = (SELECT rowid FROM semantic_fts WHERE key = ?)').run(a.key)
+          break
+        }
+      }
+    }
+  }
+  if (removed.size > 0) {
+    logEvolution('system', 'compact', { removed: removed.size, method: 'similarity' })
   }
 }
-
 function getStats() {
+  if (!db) init()
   const semanticCount = db.prepare('SELECT COUNT(*) as c FROM semantic').get().c
   const proceduralCount = db.prepare('SELECT COUNT(*) as c FROM procedural').get().c
   const skillCount = db.prepare('SELECT COUNT(*) as c FROM skill_index').get().c
@@ -456,6 +476,7 @@ function recordFeedback(memoryKey, eventType, sessionId = '', detail = '') {
 
 // Analyze session transcript to detect which injected memories were actually used
 function detectMemoryReferences(injectedKeys, transcriptSnippet) {
+  if (!db) init()
   if (!injectedKeys || injectedKeys.length === 0) return []
   const refs = []
   const snippet = (transcriptSnippet || '').toLowerCase()

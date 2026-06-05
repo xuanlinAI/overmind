@@ -1,23 +1,12 @@
 {
   "suite": "semantic_fidelity",
-  "full_chars": 4950,
-  "compressed_chars": 947,
-  "char_ratio": "19.1%",
-  "marker_union": 37,
-  "marker_intersection": 9,
-  "fidelity": "24.3%",
-  "lost_markers": [
-    "number:62",
-    "number:13",
-    "number:44",
-    "number:18",
-    "number:11",
-    "number:200",
-    "number:00",
-    "number:74",
-    "number:25",
-    "number:50"
-  ],
+  "full_chars": 4692,
+  "compressed_chars": 4692,
+  "char_ratio": "100.0%",
+  "marker_union": 53,
+  "marker_intersection": 53,
+  "fidelity": "100.0%",
+  "lost_markers": [],
   "categories": {
     "API端点": {
       "full": 0,
@@ -32,32 +21,32 @@
       "retention": "N/A"
     },
     "文件路径": {
-      "full": 1,
-      "compressed": 1,
-      "retained": 1,
+      "full": 7,
+      "compressed": 7,
+      "retained": 7,
       "retention": "100%"
     },
     "关键数字": {
       "full": 27,
-      "compressed": 8,
-      "retained": 8,
-      "retention": "30%"
+      "compressed": 27,
+      "retained": 27,
+      "retention": "100%"
     },
     "技能名": {
-      "full": 7,
-      "compressed": 0,
-      "retained": 0,
-      "retention": "0%"
+      "full": 18,
+      "compressed": 18,
+      "retained": 18,
+      "retention": "100%"
     },
     "错误码": {
-      "full": 2,
-      "compressed": 0,
-      "retained": 0,
-      "retention": "0%"
+      "full": 1,
+      "compressed": 1,
+      "retained": 1,
+      "retention": "100%"
     }
   },
   "headline": {
-    "fidelity": "24.3%",
-    "verdict": "FAIL"
+    "fidelity": "100.0%",
+    "verdict": "PASS"
   }
 }

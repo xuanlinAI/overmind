@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-05-19T19:49:09.874Z",
-  "total_seconds": "1.2",
+  "timestamp": "2026-06-05T17:35:58.629Z",
+  "total_seconds": "1.4",
   "passed": 8,
   "failed": 0,
   "results": [
@@ -9,7 +9,7 @@
       "status": "PASS",
       "elapsed": "0.1s",
       "headline": {
-        "recall_500": "90.0%",
+        "recall_500": "88.0%",
         "write_throughput": "250000 ops/sec",
         "verdict": "PASS"
       }
@@ -17,7 +17,7 @@
     {
       "name": "causal_reasoning",
       "status": "PASS",
-      "elapsed": "0.1s",
+      "elapsed": "0.2s",
       "headline": {
         "max_hops_tested": 5,
         "accuracy_at_max_hops": "100.0%",
@@ -28,7 +28,7 @@
     {
       "name": "evolution_longitudinal",
       "status": "PASS",
-      "elapsed": "0.6s",
+      "elapsed": "0.7s",
       "headline": {
         "uplift": "100.0pp",
         "verdict": "PASS"
@@ -66,8 +66,8 @@
       "status": "PASS",
       "elapsed": "0.1s",
       "headline": {
-        "fidelity": "24.3%",
-        "verdict": "FAIL"
+        "fidelity": "100.0%",
+        "verdict": "PASS"
       }
     },
     {

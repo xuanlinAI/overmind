@@ -1,6 +1,5 @@
 // ready.js — smoke test + CC compatibility regression
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const { execSync } = require('child_process');
 const { spawnWithTimeout } = require('./lib/timeout');
@@ -107,11 +106,7 @@ async function run({ timeoutMs } = {}) {
   await add('CLAUDE.md', testCLAUDEmd);
   await add('VBS Compat', testVBSCompat);
 
-  // MCP 注册需重启 CC 后生效 — 非致命
-  const mcpTest = tests.find(t => t.name === 'MCP Registration')
-  if (mcpTest) { mcpTest.critical = false; mcpTest.detail.warning = '需重启 Claude Code 后生效' }
-
-  const ok = tests.every(t => t.critical !== false ? t.ok : true);
+  const ok = tests.every(t => t.ok);
   return {
     ok,
     passed: tests.filter(t => t.ok).map(t => t.name),

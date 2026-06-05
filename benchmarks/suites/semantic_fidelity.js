@@ -32,8 +32,7 @@ async function run() {
     const report = { suite:'semantic_fidelity', error:'no inject.log', headline:{verdict:'SKIP'} }
     console.log('  No inject.log — skipping')
     fs.writeFileSync(process.env.BENCH_REPORT_PATH||path.join(__dirname,'..','reports','semantic_fidelity.json'), JSON.stringify(report,null,2))
-    process.exit(0)
-    return
+    process.exit(report?.headline?.verdict === 'FAIL' ? 1 : 0); return
   }
 
   // Read communicator log for paired C→C samples
@@ -66,8 +65,7 @@ async function run() {
       headline: { fidelity: '>85% (estimated)', verdict: 'PASS' }
     }
     fs.writeFileSync(process.env.BENCH_REPORT_PATH||path.join(__dirname,'..','reports','semantic_fidelity.json'), JSON.stringify(report,null,2))
-    process.exit(0)
-    return
+    process.exit(report?.headline?.verdict === 'FAIL' ? 1 : 0); return
   }
 
   const fullMarkers = extractMarkers(full)
@@ -108,11 +106,11 @@ async function run() {
     categories,
     headline: {
       fidelity: (fidelity * 100).toFixed(1) + '%',
-      verdict: fidelity > 0.85 ? 'PASS' : (fidelity > 0.7 ? 'PASS' : 'FAIL')
+      verdict: fidelity > 0.85 ? 'PASS' : 'FAIL'
     }
   }
 
   console.log(`  Fidelity: ${report.fidelity} | Lost: ${lost.length} markers | Char: ${report.char_ratio}%`)
   return report
 }
-run().then(r=>{ fs.writeFileSync(process.env.BENCH_REPORT_PATH||path.join(__dirname,'..','reports','semantic_fidelity.json'),JSON.stringify(r,null,2)); process.exit(0) }).catch(e=>{console.error(e);process.exit(1)})
+run().then(r=>{ fs.writeFileSync(process.env.BENCH_REPORT_PATH||path.join(__dirname,'..','reports','semantic_fidelity.json'),JSON.stringify(r,null,2)); process.exit(r?.headline?.verdict === 'FAIL' ? 1 : 0) }).catch(e=>{console.error(e);process.exit(1)})

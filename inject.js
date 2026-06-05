@@ -56,17 +56,12 @@ function writeInjection(content) {
 const EPISODIC_DIR = path.join(ROOT, 'memory', 'episodic')
 const { detectTranscriptDir } = require(path.join(ROOT, 'util'))
 const TRANSCRIPT_DIR = detectTranscriptDir() || path.join(process.env.HOME || process.env.USERPROFILE, '.claude', 'projects', 'D--claude')
-const { load: loadConfig, getAPIConfig } = require('./config')
-
-if (!fs.existsSync(EPISODIC_DIR)) fs.mkdirSync(EPISODIC_DIR, { recursive: true })
 
 function callLLM(messages, useFlash = false) {
   return new Promise((resolve, reject) => {
-    const cfg = getAPIConfig(useFlash)
-    if (!cfg || !cfg.hostname) { reject(new Error('API 未配置，请运行 node install.js')); return }
-
+    let cfg; try { cfg = require('./config').getAPIConfig(useFlash) } catch(e) { reject(e); return }
     const body = cfg.bodyBuilder(messages)
-    const req = https.request({
+    const req = require('https').request({
       hostname: cfg.hostname, path: cfg.path, method: 'POST',
       headers: cfg.headers, timeout: cfg.timeout
     }, res => {
@@ -76,9 +71,7 @@ function callLLM(messages, useFlash = false) {
         try {
           const obj = JSON.parse(data)
           if (obj.error) { reject(new Error(obj.error.message || 'API error')); return }
-          // OpenAI 格式
           if (cfg.format === 'openai') { resolve(obj.choices?.[0]?.message?.content || ''); return }
-          // Anthropic 格式
           const textBlock = obj.content?.find(c => c.type === 'text')
           resolve(textBlock ? textBlock.text : (obj.content?.[0]?.text || ''))
         } catch(e) { reject(e) }
@@ -89,9 +82,6 @@ function callLLM(messages, useFlash = false) {
     req.end()
   })
 }
-
-function callDeepSeek(messages) { return callLLM(messages, false) }
-function callDeepSeekFlash(prompt) { return callLLM([{ role: 'user', content: prompt }], true) }
 
 // AI-driven skill selection — keyword pre-filter → AI picks best
 async function selectSkillsAI(userTask, projCtx, allSkills) {
@@ -120,17 +110,12 @@ async function selectSkillsAI(userTask, projCtx, allSkills) {
 
     const skillPrefsText = index_.formatSkillPrefsForAI()
     const catalogText = parts.join('\n\n')
-
-    // Detect "comprehensive/all/everything" tasks — force broader skill selection
-    const taskLower = (userTask || '').toLowerCase()
-    const isComprehensive = /全功能|全部|全面|所有|每个|all\b|every|comprehensive|everywhere|一切|完整/.test(taskLower)
-
-    const prompt = `${skillPrefsText ? skillPrefsText + '\n\n' : ''}Pick ${isComprehensive ? '3-5' : '1-5'} skills from the catalog that match this task. BE AGGRESSIVE — pick at least ${isComprehensive ? '3' : '1'}.
+    const prompt = `${skillPrefsText ? skillPrefsText + '\n\n' : ''}Pick 1-5 skills from the catalog that match this task. BE AGGRESSIVE — pick at least 1.
 
 RULES:
 - ONLY return [] for truly trivial chat (hi/hello/thanks/ok/bye with NO technical content)
-- For ANY question about code, files, scripts, tools, debugging, config, errors, or project work: MUST pick at least 1${isComprehensive ? ' (3 for comprehensive tasks)' : ''}
-- If unsure which skill fits best, pick the closest one anyway — skills can adapt${isComprehensive ? '\n- This is a COMPREHENSIVE task — pick skills from DIFFERENT domains to cover all aspects' : ''}
+- For ANY question about code, files, scripts, tools, debugging, config, errors, or project work: MUST pick at least 1
+- If unsure which skill fits best, pick the closest one anyway — skills can adapt
 - Return ONLY a JSON array: ["skill-a","skill-b"]
 
 Task: ${(userTask || '').substring(0, 300)}
@@ -139,7 +124,7 @@ ${catalogText}`
 
     const logFile_ = path.join(ROOT, 'inject.log')
     fs.appendFileSync(logFile_, `${new Date().toISOString()} selectSkillsAI: calling flash API (${catalogText.length} chars, ${candidates.length} skills)\n`)
-    const result = await callDeepSeekFlash(prompt)
+    const result = await callLLM([{ role: 'user', content: prompt }], true)
     if (!result) {
       fs.appendFileSync(logFile_, `${new Date().toISOString()} selectSkillsAI: API returned empty\n`)
       return null
@@ -219,7 +204,7 @@ Task: ${(userTask || '').substring(0, 300)}
 
 ${catalog}`
 
-    const result = await callDeepSeekFlash(prompt)
+    const result = await callLLM([{ role: 'user', content: prompt }], true)
     if (!result) return null
 
     let names = []
@@ -270,7 +255,7 @@ ${ctx}
 
 Plan:`
 
-    const result = await callDeepSeekFlash(prompt)
+    const result = await callLLM([{ role: 'user', content: prompt }], true)
     if (!result || result.length < 10) return null
     return result.trim().split('\n').filter(l => l.length > 10).slice(0, 5).join('\n')
   } catch(e) { return null }
@@ -360,7 +345,7 @@ Transcript:
 ${transcript.raw.substring(0, 8000)}`
 
   try {
-    const result = await callDeepSeek([{ role: 'user', content: prompt }])
+    const result = await callLLM([{ role: 'user', content: prompt }])
     const json = result.replace(/```json\n?|```/g, '').trim()
     const start = json.indexOf('{'), end = json.lastIndexOf('}') + 1
     return JSON.parse(json.substring(start, end))
@@ -466,6 +451,10 @@ function buildInjection(ctx) {
   const warningSection = ctx.warningText || ''
 
   const skills = ctx.skills || []
+  const skillText = skills.slice(0, 3).map(s => {
+    const core = getSkillCore(s)
+    return `### ${s.name}\n${core || s.description?.substring(0, 200)}`
+  }).join('\n\n')
 
   const prevEpisode = loadPreviousEpisode()
   const continuityText = prevEpisode ? `\n## 上次对话\n${prevEpisode.substring(0, 300)}` : ''
@@ -474,35 +463,16 @@ function buildInjection(ctx) {
   const recentText = recentContext ? `\n## 最近消息\n${recentContext}` : ''
 
   const hasSkills = skills.length > 0
+  const mandatory = hasSkills
+    ? `## 直接执行以下指令（已注入完整内容，无需查文件）\n\n${skillText}`
+    : ''
 
-  // Build SKILL MANDATE at top — hard instruction, not buried mid-doc
-  let skillMandate = ''
-  if (hasSkills) {
-    const skillLines = skills.slice(0, 3).map(s => {
-      const core = getSkillCore(s)
-      const desc = core || s.description?.substring(0, 200) || ''
-      const args = s.recommended_args || s.args || ''
-      const invokeCall = args
-        ? `Skill("${s.name}", {args: "${args}"})`
-        : `Skill("${s.name}")`
-      return `- **${s.name}**: ${desc}\n  参数: ${args || '(无)'}\n  立即执行: ${invokeCall}`
-    }).join('\n\n')
-
-    skillMandate = `!!! SKILL MANDATE !!!
-本会话必须用 Skill 工具调用以下技能。禁止手动替代。禁止跳过。
-未完成 → 下轮注入加倍提醒。
-${skillLines}
-!!! END MANDATE !!!`
-  }
-
-  const statusLine = ctx.skillStatus || (hasSkills ? `已注入 ${skills.length} 个` : '未注入技能')
+  const statusLine = ctx.skillStatus || (hasSkills ? `已注入 ${skills.length} 个技能` : '未注入技能')
 
   return `# Xuanlin Overmind
 
 ## 当前任务
 ${ctx.userTask || '(未检测到)'}
-
-${skillMandate}
 
 ## 项目上下文
 ${ctx.projCtx}
@@ -514,6 +484,8 @@ ${recentText}
 ${planText}
 
 ${warningSection}
+
+${mandatory}
 
 ${progressText}
 
@@ -544,7 +516,7 @@ async function main() {
           const t = fs.statSync(INJECTOR_LOCK).mtimeMs
           if (Date.now() - t > 90000) { fs.unlinkSync(INJECTOR_LOCK) } // stale lock >90s
         } catch(e2) {}
-        return // another injector running, exit
+        continue // stale lock cleaned, retry
       }
       throw e
     }
@@ -582,14 +554,13 @@ async function main() {
   const stats = index.getStats()
 
   // ---- INTENT PREDICTION + PRELOAD ----
-  let prediction = null, preloadText = '', causalText = ''
+  let prediction = null, preloadText = ''
   try {
     const intent = require(path.join(ROOT, 'intent'))
     prediction = intent.predict(process.cwd())
     if (prediction && prediction.confidence >= 0.4) {
       try {
         const preloader = require(path.join(ROOT, 'preload'))
-        const graph = require(path.join(ROOT, 'graph'))
         const hints = preloader.preload(prediction, index, graph, intent)
         if (hints && hints.preload) preloadText = preloader.formatPreload(hints)
       } catch(e) {}
@@ -607,13 +578,12 @@ async function main() {
     }
   } catch(e) {}
 
-  // BROADCAST moved to after variable declarations (line ~860)
-  let morningText = ''
+  // ---- BROADCAST: parallel fan-out ---
   try {
-    const morning = require(path.join(ROOT, 'morning'))
-    const brief = morning.generate()
-    if (brief && brief.away_minutes >= 30) morningText = morning.format(brief)
-    morning.touch()
+    require(path.join(ROOT, 'broadcast')).emit('inject:parallel', {
+      userTask, projCtx, stats, memKeys: keywordMems.map(m => m.key),
+      skills: skills.map(s => s.name), prediction
+    })
   } catch(e) {}
 
   // ---- NEXUS: warmup + hot-reload ---
@@ -629,25 +599,6 @@ async function main() {
   const projCtx = projectContext()
   const searchQuery = userTask || projCtx
   const keywordMems = index.searchHybrid(searchQuery, 8)
-
-  // Blend procedural memory into search results
-  try {
-    const procResults = index.searchProcedural(searchQuery, 3)
-    for (const p of procResults) {
-      // Mark use_count via feedback to track usage
-      try { index.recordSkillFeedback(p.name, 'referenced', searchQuery, 'proc_match', 0.6) } catch(e) {}
-      // Add procedural match as a memory candidate (key=name, content=steps)
-      keywordMems.push({
-        key: 'proc_' + p.name.replace(/[^a-z0-9_]/gi, '_'),
-        content: (p.description || '') + ' — ' + (p.steps || '').substring(0, 200),
-        tags: 'procedural',
-        effectiveness_score: 0.5,
-        injected_count: 0,
-        ineffective_count: 0
-      })
-    }
-  } catch(e) {}
-
   const allMemKeys = index.getAllMemoryKeys()
 
   // Compute unresolved issues from all memories
@@ -790,7 +741,6 @@ async function main() {
   try {
     const pipeline = require(path.join(ROOT, 'pipeline'))
     require(path.join(ROOT, 'stages'))
-    const graph = require(path.join(ROOT, 'graph'))
     const pctx = { index, graph, userTask, projCtx, cwd: process.cwd(), skills, mems }
     const presults = pipeline.runSync('inject', pctx)
     // Collect text from stages not already handled manually
@@ -804,25 +754,25 @@ async function main() {
     if (extras.length > 0) pipelineText = extras.join('\n')
   } catch(e) {}
 
-  // Fleet status now handled by fleet_reporter pipeline stage (priority 103)
+  // ---- FLEET STATUS (runs before both lite and full paths) ----
+  let fleetText = ''
+  try {
+    const orchestrator = require(path.join(ROOT, 'orchestrator'))
+    const selfId = orchestrator.detectInstanceId()
+    const fleet = orchestrator.fleetStatus(selfId)
+    if (fleet.fleet_size > 1) {
+      fleetText = '## 🌐 舰队状态\n- 总实例: ' + fleet.fleet_size + ' (超脑: ' + fleet.with_overmind + ', 无超脑: ' + fleet.without_overmind + ')\n'
+        + fleet.others.map(function(o) { return '- ' + o.id + ' [' + (o.has_overmind ? '🧠' : '👁️') + '] ' + (o.status === 'active' ? '🟢' : '⚪') + ' ' + (o.working_on || '(空闲)') + ' (' + o.last_seen + ')' }).join('\n')
+    }
+  } catch(e) {}
 
   // Phase 1: Use last full injection if available, otherwise write lite
   const liteMems = keywordMems.slice(0, 5)
-  // Strip old pipeline sections from template to prevent duplicates
-  function stripRegenerated(doc) {
-    const sections = ['🚨 异常检测', '💰 成本分析', '🎼 技能编排', '🌙 梦境研究', '🔬 自主研究', '🌐 舰队动态', '🌐 舰队状态']
-    for (const s of sections) {
-      const re = new RegExp('\\n## ' + s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[\\s\\S]*?(?=\\n## |$)', 'g')
-      doc = doc.replace(re, '')
-    }
-    return doc
-  }
-
   let liteDoc = ''
   const prevFullInjection = path.join(ROOT, '.full_injection.md')
   if (fs.existsSync(prevFullInjection)) {
     // Use last session's full injection — instant, no AI delay
-    liteDoc = stripRegenerated(fs.readFileSync(prevFullInjection, 'utf-8'))
+    liteDoc = fs.readFileSync(prevFullInjection, 'utf-8')
     // Replace stale stats with current stats
     liteDoc = liteDoc.replace(/语义\d+条/, `语义${stats.semanticCount}条`)
     liteDoc = liteDoc.replace(/技能\d+个/, `技能${stats.skillCount}个`)
@@ -841,7 +791,7 @@ async function main() {
   if (researchFindings) liteDoc = liteDoc.replace('## 相关记忆', researchFindings + '\n## 相关记忆')
   if (transferText) liteDoc = liteDoc.replace('## 相关记忆', transferText + '\n## 相关记忆')
   if (shieldText) liteDoc = liteDoc.replace('## 相关记忆', shieldText + '\n## 相关记忆')
-  // fleet status now via fleet_reporter pipeline stage
+  if (fleetText) liteDoc = liteDoc.replace('## 相关记忆', fleetText + '\n## 相关记忆')
   if (pipelineText) liteDoc = liteDoc.replace('## 相关记忆', pipelineText + '\n## 相关记忆')
   writeInjection(liteDoc)
   fs.appendFileSync(logFile, `${new Date().toISOString()} inject(lite): ${liteDoc.length} chars mem=${stats.semanticCount} worker=${workerSpawned ? 'spawned' : 'already_running'}\n`)
@@ -851,14 +801,6 @@ async function main() {
   let skills = [], skillMethod = 'none', aiSaidEmpty = false
   let mems = liteMems, memMethod = 'keyword'
   let taskPlan = null
-
-  // ---- BROADCAST: parallel fan-out (all vars now declared) ----
-  try {
-    require(path.join(ROOT, 'broadcast')).emit('inject:parallel', {
-      userTask, projCtx, stats, memKeys: keywordMems.map(m => m.key),
-      skills: skills.map(s => s.name), prediction
-    })
-  } catch(e) {}
 
   // Phase 2: Run AI skill + memory + decomposition in PARALLEL
 
@@ -959,24 +901,6 @@ async function main() {
       memMethod = memMethod + '+feedback'
     }
     fs.appendFileSync(logFile, `${new Date().toISOString()} feedback: recorded ${mems.length} injections, ranked by effectiveness\n`)
-
-    // Auto-helped detection: compare against previous injection
-    try {
-      const prevFile = path.join(ROOT, '.prev_injection.json')
-      let prevMemKeys = [], prevTask = ''
-      if (fs.existsSync(prevFile)) {
-        try { const prev = JSON.parse(fs.readFileSync(prevFile, 'utf-8')); prevMemKeys = prev.keys || []; prevTask = prev.task || '' } catch(e) {}
-      }
-      const taskEvolved = (userTask || '') !== prevTask && (userTask || '').length > 10 && prevTask.length > 10
-      if (taskEvolved && prevMemKeys.length > 0) {
-        for (const k of prevMemKeys) {
-          try { index.recordFeedback(k, 'helped', sessionId, 'auto: task evolved') } catch(e) {}
-        }
-        fs.appendFileSync(logFile, `${new Date().toISOString()} feedback: auto-marked ${prevMemKeys.length} as helped (task evolved)\n`)
-      }
-      // Save current for next cycle
-      fs.writeFileSync(prevFile, JSON.stringify({ keys: mems.map(m => m.key), task: userTask || '' }), 'utf-8')
-    } catch(e) {}
   } catch(e) {
     fs.appendFileSync(logFile, `${new Date().toISOString()} feedback: recording failed: ${e.message}\n`)
   }
@@ -1041,7 +965,6 @@ async function main() {
     }
     let fullDoc = buildInjection({ mems, skills, stats, projCtx, userTask, issueMems, taskPlan, skillStatus, warningText, personaText, compactionText })
     if (preloadText) fullDoc = fullDoc.replace('## 相关记忆', preloadText + '\n## 相关记忆')
-    if (causalText) fullDoc = fullDoc.replace('## 相关记忆', causalText + '\n## 相关记忆')
     if (anomalyText) fullDoc = fullDoc.replace('## 相关记忆', anomalyText + '\n## 相关记忆')
     if (costText) fullDoc = fullDoc.replace('## 相关记忆', costText + '\n## 相关记忆')
     if (composerText) fullDoc = fullDoc.replace('## 相关记忆', composerText + '\n## 相关记忆')
@@ -1049,8 +972,9 @@ async function main() {
     if (prefetchText) fullDoc = fullDoc.replace('## 相关记忆', prefetchText + '\n## 相关记忆')
     if (dreamText) fullDoc = fullDoc.replace('## 相关记忆', dreamText + '\n## 相关记忆')
     if (researchFindings) fullDoc = fullDoc.replace('## 相关记忆', researchFindings + '\n## 相关记忆')
+    if (shieldText) fullDoc = fullDoc.replace('## 相关记忆', shieldText + '\n## 相关记忆')
     if (transferText) fullDoc = fullDoc.replace('## 相关记忆', transferText + '\n## 相关记忆')
-    // fleet status now via fleet_reporter pipeline stage
+    if (fleetText) fullDoc = fullDoc.replace('## 相关记忆', fleetText + '\n## 相关记忆')
     if (pipelineText) fullDoc = fullDoc.replace('## 相关记忆', pipelineText + '\n## 相关记忆')
 
     // ---- COMMUNICATOR: AI filter → slim injection ----
